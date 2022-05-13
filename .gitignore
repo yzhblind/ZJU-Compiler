@@ -1,4 +1,6 @@
 build
 *.l.cpp
+*.l.hpp
 *.y.cpp
+*.y.hpp
 .vscode
