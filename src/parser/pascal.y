@@ -73,6 +73,7 @@ extern void yyerror(const char*);
 %token<token_type> OP_GE
 %token<token_type> OP_ASSIGN
 %token<token_type> OP_DDOT
+%token<token_type> OP_AT
 
 %token<token_type> IO_READ
 %token<token_type> IO_WRITE
@@ -580,6 +581,7 @@ FACTOR:
     | FUNCTION_DESIGNATOR
     | OP_L_PRTS EXPRESSION OP_R_PRTS
     | KEY_NOT FACTOR
+    | OP_AT VARIABLE_ACCESS
 
 FIELD_IDENTIFIER:
     IDENTIFIER
