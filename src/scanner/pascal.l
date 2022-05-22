@@ -88,12 +88,13 @@ DIGIT [0-9]
 {DIGIT}+ { yylval.int_val=atoll(yytext); return UNSIGNED_INTEGER; }
 {DIGIT}+\.{DIGIT}+ {yylval.real_val=atof(yytext); return UNSIGNED_REAL; }
 
-[ \t\r\n] {}
+[ \t\r] {}
+[\n] { yycolumn = 1; }
 . { return yytext[0]; }
 
 %%
 
-void void yyerror(const char *s)
+void yyerror(const char *s)
 {
     fprintf(stderr, "Error: %s at (Line %d, Column%d)\n", s, yylloc.first_line, yylloc.first_column);
 }

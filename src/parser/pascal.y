@@ -2,7 +2,7 @@
 %define parse.error verbose
 
 %code requires {
-
+#include<cstdlib>
 }
 
 %{
@@ -270,9 +270,11 @@ UNSIGNED_NUMBER:
 
 SIGNED_INTEGER:
     SIGN UNSIGNED_INTEGER
+    | UNSIGNED_INTEGER
 
 SIGNED_REAL:
     SIGN UNSIGNED_REAL
+    | UNSIGNED_REAL
 
 CONSTANT_IDENTIFIER:
     IDENTIFIER
@@ -592,3 +594,9 @@ FUNCTION_DESIGNATOR:
 
 
 %%
+
+int main()
+{
+    yyparse();
+    return 0;
+}

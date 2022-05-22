@@ -4,3 +4,4 @@ build
 *.y.cpp
 *.y.hpp
 .vscode
+*.out
