@@ -3,9 +3,11 @@
 
 %code requires {
 #include<cstdlib>
+#include<cstdint>
 }
 
 %{
+extern ASTRoot *root_entry;
 extern int yylex();
 extern void yyerror(const char*);
 %}
@@ -17,7 +19,36 @@ extern void yyerror(const char*);
     bool bool_val;
     char char_val;
     char *text;
+    ASTRoot* ast_root;
+    ASTConstDef *ast_const_def;
+    ASTTypeDef *ast_type_def;
+    ASTVarDecl *ast_var_decl;
+    ASTProcFuncDecl *ast_proc_func_decl;
+    ASTStmt *ast_stmt;
+    ASTConstValue *ast_const_value;
 }
+
+%type<ast_root> PROGRAM_BLOCK
+%type<ast_root> BLOCK
+%type<ast_const_def> CONST_DEFS
+%type<ast_const_def> CONST_DEF_SEQ
+%type<ast_type_def> TYPE_DEFS
+%type<ast_type_def> TYPE_DEF_SEQ
+%type<ast_var_decl> VAR_DECLS
+%type<ast_var_decl> VAR_DECL_SEQ
+%type<ast_proc_func_decl> PROCEDURE_FUNCTION_DECLS
+%type<ast_stmt> STATEMENT_PART
+%type<ast_stmt> COMPOUND_STATEMENT
+%type<ast_stmt> STATEMENT_SEQS
+%type<ast_const_value> CONSTANT
+%type<ast_const_value> UNSIGNED_CONSTANT
+%type<ast_const_value> SIGNED_NUMBER
+%type<ast_const_value> UNSIGNED_NUMBER
+%type<real_val> SIGNED_REAL
+%type<int_val> SIGNED_INTEGER
+%type<token_type> SIGN
+%type<text> CONSTANT_IDENTIFIER
+%type<text> TYPE_IDENTIFIER
 
 %token<token_type> KEY_AND
 %token<token_type> KEY_ARRAY
@@ -96,58 +127,95 @@ extern void yyerror(const char*);
 %%
     /* 程序和块 */
 PROGRAM:
-    PROGRAM_HEADING OP_SEMICOLON PROGRAM_BLOCK
-
+    PROGRAM_HEADING OP_SEMICOLON PROGRAM_BLOCK {
+        root_entry = $3;
+    }
 
 PROGRAM_HEADING:
     KEY_PROGRAM IDENTIFIER OP_L_PRTS PROGRAM_PARAMETERS OP_R_PRTS
-
 
 PROGRAM_PARAMETERS:
     | IDENTIFIER_LIST
 
 PROGRAM_BLOCK:
-    BLOCK OP_DOT
+    BLOCK OP_DOT {
+        $$ = $1;
+    }
 
 BLOCK:
-    CONST_DEFS TYPE_DEFS VAR_DECLS PROCEDURE_FUNCTION_DECLS STATEMENT_PART
-    | CONST_DEFS TYPE_DEFS VAR_DECLS STATEMENT_PART
+    CONST_DEFS TYPE_DEFS VAR_DECLS PROCEDURE_FUNCTION_DECLS STATEMENT_PART {
+        $$ = new ASTRoot($1, $2, $3, $4, $5);
+    }
+    | CONST_DEFS TYPE_DEFS VAR_DECLS STATEMENT_PART {
+        $$ = new ASTRoot($1, $2, $3, nullptr, $5);
+    }
 
     /* 声明和类型定义 */
 
-CONST_DEFS:
-    | KEY_CONST CONST_DEF_SEQ OP_SEMICOLON
+CONST_DEFS: 
+    {
+        $$ = nullptr;
+    }
+    | KEY_CONST CONST_DEF_SEQ OP_SEMICOLON {
+        $$ = $2;
+    }
 
 CONST_DEF_SEQ:
-    CONST_DEF_SEQ OP_SEMICOLON CONST_DEF
-    | CONST_DEF
+    CONST_DEF_SEQ OP_SEMICOLON CONST_DEF {
+
+    }
+    | CONST_DEF {
+
+    }
 
 CONST_DEF:
     IDENTIFIER OP_EQ CONSTANT
 
 TYPE_DEFS:
-    | KEY_TYPE TYPE_DEF_SEQ OP_SEMICOLON
+    {
+        $$ = nullptr;
+    }
+    | KEY_TYPE TYPE_DEF_SEQ OP_SEMICOLON {
+        $$ = $2;
+    }
 
 TYPE_DEF_SEQ:
-    TYPE_DEF_SEQ OP_SEMICOLON TYPE_DEF
-    | TYPE_DEF
+    TYPE_DEF_SEQ OP_SEMICOLON TYPE_DEF {
+
+    }
+    | TYPE_DEF {
+
+    }
 
 TYPE_DEF:
     IDENTIFIER OP_EQ TYPE_DENOTER
 
 VAR_DECLS:
-    | KEY_VAR VAR_DECL_SEQ OP_SEMICOLON
+    {
+        $$ = nullptr;
+    }
+    | KEY_VAR VAR_DECL_SEQ OP_SEMICOLON {
+        $$ = $2;
+    }
 
 VAR_DECL_SEQ:
-    VAR_DECL_SEQ OP_SEMICOLON VAR_DECL
-    | VAR_DECL
+    VAR_DECL_SEQ OP_SEMICOLON VAR_DECL {
+
+    }
+    | VAR_DECL {
+
+    }
 
 VAR_DECL:
     IDENTIFIER_LIST OP_COLON TYPE_DENOTER
 
 PROCEDURE_FUNCTION_DECLS:
-    PROCEDURE_FUNCTION_DECLS SUBPROGRAM_DECL OP_SEMICOLON
-    | SUBPROGRAM_DECL OP_SEMICOLON
+    PROCEDURE_FUNCTION_DECLS SUBPROGRAM_DECL OP_SEMICOLON {
+
+    }
+    | SUBPROGRAM_DECL OP_SEMICOLON {
+
+    }
 
 IDENTIFIER_LIST:
     IDENTIFIER_LIST OP_COMMA IDENTIFIER
@@ -156,7 +224,8 @@ IDENTIFIER_LIST:
     /* 子程序声明 */
 
 SUBPROGRAM_DECL:
-    PROCEDURE_DECL | FUNCTION_DECL
+    PROCEDURE_DECL 
+    | FUNCTION_DECL
 
     /* 过程声明 */
 
@@ -251,38 +320,76 @@ INDEX_TYPE_SPEC:
     /* 常量 */
 
 CONSTANT:
-    SIGNED_NUMBER
-    | CONSTANT_IDENTIFIER
-    | CHARACTER_STRING
+    SIGNED_NUMBER {
+        $$ = $1;
+    }
+    | CONSTANT_IDENTIFIER {
+        $$ = new ASTConstValue($1, true);
+    }
+    | CHARACTER_STRING {
+        $$ = new ASTConstValue($1, false);
+    }
 
 UNSIGNED_CONSTANT:
-    UNSIGNED_NUMBER
-    | CHARACTER_STRING
-    | KEY_NIL
+    UNSIGNED_NUMBER {
+        $$ = $1;
+    }
+    | CHARACTER_STRING {
+        $$ = new ASTConstValue($1, false);
+    }
+    | KEY_NIL {
+        $$ = new ASTConstValue();
+    }
 
 SIGNED_NUMBER:
-    SIGNED_INTEGER
-    | SIGNED_REAL
+    SIGNED_INTEGER {
+        $$ = new ASTConstValue($1);
+    }
+    | SIGNED_REAL {
+        $$ = new ASTConstValue($1);
+    }
 
 UNSIGNED_NUMBER:
-    UNSIGNED_INTEGER
-    | UNSIGNED_REAL
+    UNSIGNED_INTEGER {
+        $$ = new ASTConstValue($1);
+    }
+    | UNSIGNED_REAL {
+        $$ = new ASTConstValue($1);
+    }
 
 SIGNED_INTEGER:
-    SIGN UNSIGNED_INTEGER
-    | UNSIGNED_INTEGER
+    SIGN UNSIGNED_INTEGER{
+        if($1 == OP_SUB)
+            $$ = -$2;
+        else
+            $$ = $2;
+    }
+    | UNSIGNED_INTEGER {
+        $$ = $1;
+    }
 
 SIGNED_REAL:
-    SIGN UNSIGNED_REAL
-    | UNSIGNED_REAL
+    SIGN UNSIGNED_REAL {
+        if($1 == OP_SUB)
+            $$ = -$2;
+        else
+            $$ = $2;
+    }
+    | UNSIGNED_REAL {
+        $$ = $1;
+    }
 
 CONSTANT_IDENTIFIER:
-    IDENTIFIER
+    IDENTIFIER {
+        $$ = $1;
+    }
 
     /* 类型 */ 
 
 TYPE_IDENTIFIER:
-    IDENTIFIER
+    IDENTIFIER {
+        $$ = $1;
+    }
 
 NEW_TYPE:
     NEW_ORDINAL_TYPE
@@ -401,10 +508,14 @@ WRITE_PARA:
     | EXPRESSION OP_COLON EXPRESSION OP_COLON EXPRESSION
 
 STATEMENT_PART:
-    COMPOUND_STATEMENT
+    COMPOUND_STATEMENT {
+        $$ = $1;
+    }
 
 COMPOUND_STATEMENT:
-    KEY_BEGIN STATEMENT_SEQS KEY_END
+    KEY_BEGIN STATEMENT_SEQS KEY_END {
+        $$ = $2;
+    }
 
 STATEMENT_SEQS:
     STATEMENT
@@ -533,8 +644,12 @@ ADDING_OP:
     | OP_SUB
 
 SIGN:
-    OP_ADD
-    | OP_SUB
+    OP_ADD {
+        $$ = $1;
+    }
+    | OP_SUB {
+        $$ = $1;
+    }
 
 VARIABLE_IDENTIFIER:
     IDENTIFIER
@@ -595,8 +710,8 @@ FUNCTION_DESIGNATOR:
 
 %%
 
-int main()
+/* int main()
 {
     yyparse();
     return 0;
-}
+} */
