@@ -26,14 +26,32 @@ extern void yyerror(const char*);
     ASTProcFuncDecl *ast_proc_func_decl;
     ASTStmt *ast_stmt;
     ASTConstValue *ast_const_value;
+    ASTType *ast_type;
+    ASTTypeId *ast_type_id;
+    ASTTypeSubrange *ast_type_subrange;
+    ASTTypeStructure *ast_type_structure;
+    ASTTypeArray *ast_type_array;
+    ASTTypeRecord *ast_type_record;
+    ASTTypePointer *ast_type_pointer;
 }
 
 %type<ast_root> PROGRAM_BLOCK
 %type<ast_root> BLOCK
 %type<ast_const_def> CONST_DEFS
 %type<ast_const_def> CONST_DEF_SEQ
+%type<ast_const_def> CONST_DEF
 %type<ast_type_def> TYPE_DEFS
 %type<ast_type_def> TYPE_DEF_SEQ
+%type<ast_type_def> TYPE_DEF
+%type<ast_type> TYPE_DENOTER
+%type<ast_type> NEW_TYPE
+%type<ast_type_subrange> NEW_ORDINAL_TYPE
+%type<ast_type_structure> NEW_STRUCTURED_TYPE
+%type<ast_type_structure> UNPACKED_STRUCTURE_TYPE
+%type<ast_type_array> ARRAY_TYPE
+%type<ast_type_record> RECORD_TYPE
+%type<ast_type_pointer> NEW_POINTER_TYPE
+%type<ast_type_subrange> SUBRANGE_TYPE
 %type<ast_var_decl> VAR_DECLS
 %type<ast_var_decl> VAR_DECL_SEQ
 %type<ast_proc_func_decl> PROCEDURE_FUNCTION_DECLS
@@ -49,6 +67,8 @@ extern void yyerror(const char*);
 %type<token_type> SIGN
 %type<text> CONSTANT_IDENTIFIER
 %type<text> TYPE_IDENTIFIER
+%type<text> RESULT_TYPE
+%type<text> DOMAIN_TYPE
 
 %token<token_type> KEY_AND
 %token<token_type> KEY_ARRAY
@@ -162,14 +182,16 @@ CONST_DEFS:
 
 CONST_DEF_SEQ:
     CONST_DEF_SEQ OP_SEMICOLON CONST_DEF {
-
+        $$ = $1->append($3);
     }
     | CONST_DEF {
-
+        $$ = $1;
     }
 
 CONST_DEF:
-    IDENTIFIER OP_EQ CONSTANT
+    IDENTIFIER OP_EQ CONSTANT {
+        $$ = new ASTConstDef($1, $3);
+    }
 
 TYPE_DEFS:
     {
@@ -181,14 +203,16 @@ TYPE_DEFS:
 
 TYPE_DEF_SEQ:
     TYPE_DEF_SEQ OP_SEMICOLON TYPE_DEF {
-
+        $$ = $1->append($3);
     }
     | TYPE_DEF {
-
+        $$ = $1;
     }
 
 TYPE_DEF:
-    IDENTIFIER OP_EQ TYPE_DENOTER
+    IDENTIFIER OP_EQ TYPE_DENOTER {
+        $$ = new ASTTypeDef($1, $3);
+    }
 
 VAR_DECLS:
     {
@@ -247,8 +271,12 @@ DIRECTIVE:
     KEY_FORWARD
 
 TYPE_DENOTER:
-    TYPE_IDENTIFIER
-    | NEW_TYPE
+    TYPE_IDENTIFIER {
+        $$ = new ASTTypeId($1);
+    }
+    | NEW_TYPE {
+        $$ = $1;
+    }
 
     /* 函数声明 */
 
@@ -392,32 +420,57 @@ TYPE_IDENTIFIER:
     }
 
 NEW_TYPE:
-    NEW_ORDINAL_TYPE
-    | NEW_STRUCTURED_TYPE
-    | NEW_POINTER_TYPE
+    NEW_ORDINAL_TYPE {
+        $$ = $1;
+    }
+    | NEW_STRUCTURED_TYPE {
+        $$ = $1;
+    }
+    | NEW_POINTER_TYPE {
+        $$ = $1;
+    }
 
 RESULT_TYPE:
-    TYPE_IDENTIFIER
+    TYPE_IDENTIFIER {
+        $$ = $1;
+    }
 
 NEW_ORDINAL_TYPE:
-    SUBRANGE_TYPE
+    SUBRANGE_TYPE {
+        $$ = $1;
+    }
     
 NEW_STRUCTURED_TYPE:
-    UNPACKED_STRUCTURE_TYPE
-    | KEY_PACKED UNPACKED_STRUCTURE_TYPE
+    UNPACKED_STRUCTURE_TYPE {
+        $$ = $1;
+    }
+    | KEY_PACKED UNPACKED_STRUCTURE_TYPE {
+        $1->set_packed_flag();
+        $$ = $1;
+    }
 
 NEW_POINTER_TYPE:
-    OP_CARET DOMAIN_TYPE
+    OP_CARET DOMAIN_TYPE {
+        $$ = new ASTTypePointer($2, false);
+    }
 
 SUBRANGE_TYPE:
-    CONSTANT OP_DDOT CONSTANT
+    CONSTANT OP_DDOT CONSTANT {
+        $$ = new ASTTypeSubrange($1, $3);
+    }
 
 UNPACKED_STRUCTURE_TYPE:
-    ARRAY_TYPE
-    | RECORD_TYPE
+    ARRAY_TYPE {
+        $$ = $1;
+    }
+    | RECORD_TYPE {
+        $$ = $1;
+    }
 
 DOMAIN_TYPE:
-    TYPE_IDENTIFIER
+    TYPE_IDENTIFIER {
+        $$ = $1;
+    }
 
 ARRAY_TYPE:
     KEY_ARRAY OP_L_BCK INDEX_TYPES OP_R_BCK KEY_OF COMPONENT_TYPE
