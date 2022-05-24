@@ -11,9 +11,14 @@ ASTRoot::ASTRoot(ASTConstDef *const_def, ASTTypeDef *type_def, ASTVarDecl *var_d
 
 ASTRoot::~ASTRoot()
 {
-    delete const_def;
-    delete type_def;
-    delete var_decl;
-    delete proc_func_decl;
-    delete stmt;
+    if (const_def)
+        delete const_def;
+    if (type_def)
+        delete type_def;
+    if (var_decl)
+        delete var_decl;
+    if (proc_func_decl)
+        delete proc_func_decl;
+    if (stmt)
+        delete stmt;
 }

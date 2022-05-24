@@ -46,7 +46,7 @@ class ASTVarDecl;
 class ASTType : public ASTNode
 {
 public:
-    ~ASTType();
+    virtual ~ASTType() = 0;
     enum TypeKind
     {
         ID,
@@ -55,39 +55,68 @@ public:
         RECORD,
         POINTER
     };
-    virtual TypeKind get_type() = 0;
+    virtual ASTType::TypeKind get_type() = 0;
+};
+
+class ASTTypeId : public ASTType
+{
+public:
+    ASTTypeId(char *id);
+    ~ASTTypeId();
+    ASTType::TypeKind get_type();
+    string id;
 };
 
 class ASTTypeSubrange : public ASTType
 {
 public:
-    TypeKind get_type();
+    ASTTypeSubrange(char *id);
+    ASTTypeSubrange(ASTConstValue *left, ASTConstValue *right);
+    ~ASTTypeSubrange();
+    ASTType::TypeKind get_type();
+    bool is_range_id;
+    string range_id;
+    ASTConstValue *left, *right;
 };
 
 class ASTTypeStructure : public ASTType
 {
 public:
-    virtual TypeKind get_type() = 0;
-    virtual void set_packed_flag() = 0;
+    ASTTypeStructure();
+    virtual ~ASTTypeStructure() = 0;
+    virtual ASTType::TypeKind get_type() = 0;
+    void set_packed_flag();
     bool packed_flag;
 };
 
 class ASTTypeArray : public ASTTypeStructure
 {
 public:
-    TypeKind get_type();
+    ASTTypeArray();
+    ~ASTTypeArray();
+    ASTType::TypeKind get_type();
+    void set_element_type(ASTType *type);
+    void push_index(ASTTypeSubrange *idx);
+    vector<ASTTypeSubrange *> index;
+    ASTType *element_type;
 };
 
 class ASTTypeRecord : public ASTTypeStructure
 {
 public:
-    TypeKind get_type();
+    ~ASTTypeRecord();
+    ASTType::TypeKind get_type();
+    void push_var_decl(ASTVarDecl *decl);
+    vector<ASTVarDecl *> var_decl_list;
 };
 
 class ASTTypePointer : public ASTType
 {
 public:
-    TypeKind get_type();
+    ASTTypePointer(ASTType *type);
+    ~ASTTypePointer();
+    ASTType::TypeKind get_type();
+    ASTType *pointer_type;
 };
 
 class ASTTypeDef : public ASTNode
@@ -104,4 +133,10 @@ public:
 class ASTVarDecl : public ASTNode
 {
 public:
+    ASTVarDecl(vector<char *> &id, ASTType *type);
+    ~ASTVarDecl();
+    ASTVarDecl *append(ASTVarDecl *next);
+    vector<string> id_list;
+    ASTType *var_type;
+    ASTVarDecl *next_var_decl;
 };

@@ -33,6 +33,7 @@ extern void yyerror(const char*);
     ASTTypeArray *ast_type_array;
     ASTTypeRecord *ast_type_record;
     ASTTypePointer *ast_type_pointer;
+    vector<char *> id_list;
 }
 
 %type<ast_root> PROGRAM_BLOCK
@@ -45,15 +46,23 @@ extern void yyerror(const char*);
 %type<ast_type_def> TYPE_DEF
 %type<ast_type> TYPE_DENOTER
 %type<ast_type> NEW_TYPE
+%type<ast_type> COMPONENT_TYPE
 %type<ast_type_subrange> NEW_ORDINAL_TYPE
 %type<ast_type_structure> NEW_STRUCTURED_TYPE
 %type<ast_type_structure> UNPACKED_STRUCTURE_TYPE
 %type<ast_type_array> ARRAY_TYPE
+%type<ast_type_array> INDEX_TYPES
 %type<ast_type_record> RECORD_TYPE
+%type<ast_type_record> FIXED_PART
+%type<ast_type_record> FIELD_LIST
 %type<ast_type_pointer> NEW_POINTER_TYPE
 %type<ast_type_subrange> SUBRANGE_TYPE
+%type<ast_type_subrange> ORDINAL_TYPE
+%type<ast_type_subrange> INDEX_TYPE
 %type<ast_var_decl> VAR_DECLS
 %type<ast_var_decl> VAR_DECL_SEQ
+%type<ast_var_decl> VAR_DECL
+%type<ast_var_decl> RECORD_SECTION
 %type<ast_proc_func_decl> PROCEDURE_FUNCTION_DECLS
 %type<ast_stmt> STATEMENT_PART
 %type<ast_stmt> COMPOUND_STATEMENT
@@ -65,10 +74,12 @@ extern void yyerror(const char*);
 %type<real_val> SIGNED_REAL
 %type<int_val> SIGNED_INTEGER
 %type<token_type> SIGN
+%type<id_list> IDENTIFIER_LIST
 %type<text> CONSTANT_IDENTIFIER
 %type<text> TYPE_IDENTIFIER
 %type<text> RESULT_TYPE
 %type<text> DOMAIN_TYPE
+%type<text> ORDINAL_TYPE_IDENTIFIER
 
 %token<token_type> KEY_AND
 %token<token_type> KEY_ARRAY
@@ -224,14 +235,16 @@ VAR_DECLS:
 
 VAR_DECL_SEQ:
     VAR_DECL_SEQ OP_SEMICOLON VAR_DECL {
-
+        $$ = $1->append($3);
     }
     | VAR_DECL {
-
+        $$ = $1;
     }
 
 VAR_DECL:
-    IDENTIFIER_LIST OP_COLON TYPE_DENOTER
+    IDENTIFIER_LIST OP_COLON TYPE_DENOTER {
+        $$ = new ASTVarDecl($1, $3);
+    }
 
 PROCEDURE_FUNCTION_DECLS:
     PROCEDURE_FUNCTION_DECLS SUBPROGRAM_DECL OP_SEMICOLON {
@@ -242,8 +255,14 @@ PROCEDURE_FUNCTION_DECLS:
     }
 
 IDENTIFIER_LIST:
-    IDENTIFIER_LIST OP_COMMA IDENTIFIER
-    | IDENTIFIER
+    IDENTIFIER_LIST OP_COMMA IDENTIFIER {
+        $$ = $1;
+        $$->push_back($3);
+    }
+    | IDENTIFIER {
+        $$ = new vector<char *>;
+        $$->push_back($1);
+    }
 
     /* 子程序声明 */
 
@@ -451,7 +470,7 @@ NEW_STRUCTURED_TYPE:
 
 NEW_POINTER_TYPE:
     OP_CARET DOMAIN_TYPE {
-        $$ = new ASTTypePointer($2, false);
+        $$ = new ASTTypePointer($2);
     }
 
 SUBRANGE_TYPE:
@@ -473,37 +492,68 @@ DOMAIN_TYPE:
     }
 
 ARRAY_TYPE:
-    KEY_ARRAY OP_L_BCK INDEX_TYPES OP_R_BCK KEY_OF COMPONENT_TYPE
+    KEY_ARRAY OP_L_BCK INDEX_TYPES OP_R_BCK KEY_OF COMPONENT_TYPE {
+        $$ = $3;
+        $$->set_element_type($6);
+    }
 
 INDEX_TYPES:
-    INDEX_TYPES OP_COMMA INDEX_TYPE
-    | INDEX_TYPE
+    INDEX_TYPES OP_COMMA INDEX_TYPE {
+        $$ = $1;
+        $$->push_index($3);
+    }
+    | INDEX_TYPE {
+        $$ = new ASTTypeArray();
+        $$->push_index($1);
+    }
 
 INDEX_TYPE:
-    ORDINAL_TYPE
+    ORDINAL_TYPE {
+        $$ = $1;
+    }
 
 COMPONENT_TYPE:
-    TYPE_DENOTER
+    TYPE_DENOTER {
+        $$ = $1;
+    }
 
 ORDINAL_TYPE:
-    NEW_ORDINAL_TYPE
-    | ORDINAL_TYPE_IDENTIFIER
+    NEW_ORDINAL_TYPE {
+        $$ = $1;
+    }
+    | ORDINAL_TYPE_IDENTIFIER {
+        $$ = new ASTTypeSubrange($1);
+    }
 
 ORDINAL_TYPE_IDENTIFIER:
-    TYPE_IDENTIFIER
+    TYPE_IDENTIFIER {
+        $$ = $1;
+    }
 
 RECORD_TYPE:
-    KEY_RECORD FIELD_LIST KEY_END
+    KEY_RECORD FIELD_LIST KEY_END {
+        $$ = $2;
+    }
 
 RECORD_SECTION:
-    IDENTIFIER_LIST OP_COLON TYPE_DENOTER
+    IDENTIFIER_LIST OP_COLON TYPE_DENOTER {
+        $$ = new ASTVarDecl($1, $3);
+    }
 
 FIELD_LIST:
-    | FIXED_PART OP_SEMICOLON
+    FIXED_PART OP_SEMICOLON {
+        $$ = $1;
+    }
 
 FIXED_PART:
-    FIXED_PART OP_SEMICOLON RECORD_SECTION
-    | RECORD_SECTION
+    FIXED_PART OP_SEMICOLON RECORD_SECTION {
+        $$ = $1;
+        $$->push_var_decl($3);
+    }
+    | RECORD_SECTION {
+        $$ = new ASTTypeRecord();
+        $$->push_var_decl($1);
+    }
 
     /* 语句 */
 
