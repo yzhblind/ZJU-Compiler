@@ -23,7 +23,11 @@ extern void yyerror(const char*);
     ASTConstDef *ast_const_def;
     ASTTypeDef *ast_type_def;
     ASTVarDecl *ast_var_decl;
+    ASTParameter *ast_para;
     ASTProcFuncDecl *ast_proc_func_decl;
+    ASTProcDecl *ast_proc_decl;
+    ASTFuncDecl *ast_func_decl;
+    ASTProcFuncBlock *ast_proc_func_block;
     ASTStmt *ast_stmt;
     ASTConstValue *ast_const_value;
     ASTType *ast_type;
@@ -63,7 +67,21 @@ extern void yyerror(const char*);
 %type<ast_var_decl> VAR_DECL_SEQ
 %type<ast_var_decl> VAR_DECL
 %type<ast_var_decl> RECORD_SECTION
+%type<ast_var_decl> VALUE_PARA_SPEC
+%type<ast_var_decl> VARIABLE_PARA_SPEC
 %type<ast_proc_func_decl> PROCEDURE_FUNCTION_DECLS
+%type<ast_proc_func_decl> SUBPROGRAM_DECL
+%type<ast_proc_decl> PROCEDURE_DECL
+%type<ast_proc_decl> PROCEDURE_HEADING
+%type<ast_proc_decl> PROCEDURE_PARA_SEPC
+%type<ast_func_decl> FUNCTION_DECL
+%type<ast_func_decl> FUNCTION_HEADING
+%type<ast_func_decl> FUNCTION_PARA_SEPC
+%type<ast_para> FORMAL_PARAMETER_LIST
+%type<ast_para> FORMAL_PARAMETER_SECTIONS
+%type<ast_para> FORMAL_PARAMETER_SECTION
+%type<ast_proc_func_block> PROCEDURE_BLOCK
+%type<ast_proc_func_block> FUNCTION_BLOCK
 %type<ast_stmt> STATEMENT_PART
 %type<ast_stmt> COMPOUND_STATEMENT
 %type<ast_stmt> STATEMENT_SEQS
@@ -80,6 +98,7 @@ extern void yyerror(const char*);
 %type<text> RESULT_TYPE
 %type<text> DOMAIN_TYPE
 %type<text> ORDINAL_TYPE_IDENTIFIER
+%type<text> PROCEDURE_IDENTIFIER
 
 %token<token_type> KEY_AND
 %token<token_type> KEY_ARRAY
@@ -248,10 +267,10 @@ VAR_DECL:
 
 PROCEDURE_FUNCTION_DECLS:
     PROCEDURE_FUNCTION_DECLS SUBPROGRAM_DECL OP_SEMICOLON {
-
+        $$ = $1->append($2);
     }
     | SUBPROGRAM_DECL OP_SEMICOLON {
-
+        $$ = $1;
     }
 
 IDENTIFIER_LIST:
@@ -267,24 +286,42 @@ IDENTIFIER_LIST:
     /* 子程序声明 */
 
 SUBPROGRAM_DECL:
-    PROCEDURE_DECL 
-    | FUNCTION_DECL
+    PROCEDURE_DECL {
+        $$ = $1;
+    }
+    | FUNCTION_DECL {
+        $$ = $1;
+    }
 
     /* 过程声明 */
 
 PROCEDURE_DECL:
-    PROCEDURE_HEADING OP_SEMICOLON DIRECTIVE
-    | PROCEDURE_HEADING OP_SEMICOLON PROCEDURE_BLOCK
+    PROCEDURE_HEADING OP_SEMICOLON DIRECTIVE {
+        $$ = $1;
+        $$->set_forward();
+    }
+    | PROCEDURE_HEADING OP_SEMICOLON PROCEDURE_BLOCK {
+        $$ = $1;
+        $$->set_block($3);
+    }
 
 PROCEDURE_HEADING:
-    KEY_PROCEDURE IDENTIFIER
-    | KEY_PROCEDURE IDENTIFIER FORMAL_PARAMETER_LIST
+    KEY_PROCEDURE IDENTIFIER {
+        $$ = new ASTProcDecl($2, nullptr);
+    }
+    | KEY_PROCEDURE IDENTIFIER FORMAL_PARAMETER_LIST {
+        $$ = new ASTProcDecl($2, $3);
+    }
 
 PROCEDURE_BLOCK:
-    CONST_DEFS TYPE_DEFS VAR_DECLS STATEMENT_PART
+    CONST_DEFS TYPE_DEFS VAR_DECLS STATEMENT_PART {
+        $$ = new ASTProcFuncBlock($1, $2, $3, $3);
+    }
 
 PROCEDURE_IDENTIFIER:
-    IDENTIFIER
+    IDENTIFIER {
+        $$ = $1;
+    }
 
 DIRECTIVE:
     KEY_FORWARD
@@ -300,41 +337,78 @@ TYPE_DENOTER:
     /* 函数声明 */
 
 FUNCTION_DECL:
-    FUNCTION_HEADING OP_SEMICOLON DIRECTIVE
-    | FUNCTION_HEADING OP_SEMICOLON FUNCTION_BLOCK
+    FUNCTION_HEADING OP_SEMICOLON DIRECTIVE {
+        $$ = $1;
+        $$->set_forward();
+    }
+    | FUNCTION_HEADING OP_SEMICOLON FUNCTION_BLOCK {
+        $$ = $1;
+        $$->set_block($3);
+    }
 
 FUNCTION_HEADING:
-    KEY_FUNCTION IDENTIFIER FORMAL_PARAMETER_LIST OP_COLON RESULT_TYPE
-    | KEY_FUNCTION IDENTIFIER OP_COLON RESULT_TYPE
+    KEY_FUNCTION IDENTIFIER FORMAL_PARAMETER_LIST OP_COLON RESULT_TYPE {
+        $$ = new ASTFuncDecl($2, $3, $5);
+    }
+    | KEY_FUNCTION IDENTIFIER OP_COLON RESULT_TYPE {
+        $$ = new ASTFuncDecl($2, nullptr, $5);
+    }
 
 FUNCTION_BLOCK:
-    CONST_DEFS TYPE_DEFS VAR_DECLS STATEMENT_PART
+    CONST_DEFS TYPE_DEFS VAR_DECLS STATEMENT_PART {
+        $$ = new ASTProcFuncBlock($1, $2, $3, $3);
+    }
 
 FORMAL_PARAMETER_LIST:
-    OP_L_PRTS FORMAL_PARAMETER_SECTIONS OP_R_PRTS
+    OP_L_PRTS FORMAL_PARAMETER_SECTIONS OP_R_PRTS {
+        $$ = $2;
+    }
 
 FORMAL_PARAMETER_SECTIONS:
-    FORMAL_PARAMETER_SECTIONS OP_SEMICOLON FORMAL_PARAMETER_SECTION
-    | FORMAL_PARAMETER_SECTION
+    FORMAL_PARAMETER_SECTIONS OP_SEMICOLON FORMAL_PARAMETER_SECTION {
+        $$ = $1->append($3);
+    }
+    | FORMAL_PARAMETER_SECTION {
+        $$ = $1;
+    }
 
 FORMAL_PARAMETER_SECTION:
-    VALUE_PARA_SPEC
-    | VARIABLE_PARA_SPEC
-    | PROCEDURE_PARA_SEPC
-    | FUNCTION_PARA_SEPC
-    | CONFORMANT_ARRAY_PARA_SEPC
+    VALUE_PARA_SPEC {
+        $$ = new ASTParameter($1, false);
+    }
+    | VARIABLE_PARA_SPEC {
+        $$ = new ASTParameter($1, true);
+    }
+    | PROCEDURE_PARA_SEPC {
+        $$ = new ASTParameter($1);
+    }
+    | FUNCTION_PARA_SEPC {
+        $$ = new ASTParameter($1);
+    }
+    | CONFORMANT_ARRAY_PARA_SEPC {
+        // TODO
+        $$ = nullptr;
+    }
 
 VALUE_PARA_SPEC:
-    IDENTIFIER_LIST OP_COLON TYPE_IDENTIFIER
+    IDENTIFIER_LIST OP_COLON TYPE_IDENTIFIER {
+        $$ = new ASTVarDecl($1, new ASTTypeId($3));
+    }
 
 VARIABLE_PARA_SPEC:
-    KEY_VAR IDENTIFIER_LIST OP_COLON TYPE_IDENTIFIER
+    KEY_VAR IDENTIFIER_LIST OP_COLON TYPE_IDENTIFIER {
+        $$ = new ASTVarDecl($2, new ASTTypeId($4));
+    }
 
 PROCEDURE_PARA_SEPC:
-    PROCEDURE_HEADING
+    PROCEDURE_HEADING {
+        $$ = $1;
+    }
 
 FUNCTION_PARA_SEPC:
-    FUNCTION_HEADING
+    FUNCTION_HEADING {
+        $$ = $1;
+    }
 
 CONFORMANT_ARRAY_PARA_SEPC:
     VALUE_CONFORMANT_ARRAY_SEPC
