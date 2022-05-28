@@ -13,7 +13,7 @@ public:
         EXPRESSION,
         PROCEDURE,
         FUNCTION
-    };
+    } type;
     ASTActualPara::TypeKind get_type();
     ASTActualPara *append(ASTActualPara *next);
     ASTActualPara *next_actual_para;
@@ -82,6 +82,9 @@ public:
     ASTAssignStmt(ASTExpr *right);
     ~ASTAssignStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
+    // 如果left为nullptr说明是函数返回值赋值语句
+    ASTVarAccess* left;
+    ASTExpr* right;
 };
 
 class ASTIfStmt : public ASTStmt
@@ -90,6 +93,9 @@ public:
     ASTIfStmt(ASTExpr *cond, ASTStmt *true_block, ASTStmt *false_block);
     ~ASTIfStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
+    ASTExpr* cond;
+    ASTStmt* true_block;
+    ASTStmt* false_block;
 };
 
 class ASTRepeatStmt : public ASTStmt
@@ -98,6 +104,8 @@ public:
     ASTRepeatStmt(ASTStmt *loop_body, ASTExpr *cond);
     ~ASTRepeatStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
+    ASTStmt* loop_body;
+    ASTExpr* cond;
 };
 
 class ASTWhileStmt : public ASTStmt
@@ -106,14 +114,21 @@ public:
     ASTWhileStmt(ASTExpr *cond, ASTStmt *loop_body);
     ~ASTWhileStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
+    ASTExpr* cond;
+    ASTStmt* loop_body;
 };
 
 class ASTForStmt : public ASTStmt
 {
 public:
-    ASTForStmt(char *loop_var, ASTExpr *init, ASTExpr *final, bool is_downto, ASTStmt *loop_body);
+    ASTForStmt(char *loop_var, ASTExpr *init_value, ASTExpr *final_value, bool is_downto, ASTStmt *loop_body);
     ~ASTForStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
+    string loop_var;
+    ASTExpr* init_value;
+    ASTExpr* final_value;
+    bool is_downto;
+    ASTStmt* loop_body;
 };
 
 class ASTProcStmt : public ASTStmt
@@ -139,6 +154,8 @@ public:
     ASTReadStmt(bool with_newline, ASTReadPara *para);
     ~ASTReadStmt();
     ASTProcStmt::TypeKind get_proc_type();
+    bool newline;
+    ASTReadPara* para;
 };
 
 class ASTWriteStmt : public ASTProcStmt
@@ -147,4 +164,6 @@ public:
     ASTWriteStmt(bool with_newline, ASTWritePara *para);
     ~ASTWriteStmt();
     ASTProcStmt::TypeKind get_proc_type();
+    bool newline;
+    ASTWritePara* para;
 };

@@ -48,6 +48,17 @@ extern void yyerror(const char*);
     ASTWhileStmt *ast_while_stmt;
     ASTForStmt *ast_for_stmt;
     ASTExpr *ast_expr;
+    ASTSimpleExpr *ast_simple_expr;
+    ASTTerm *ast_term;
+    ASTFactor *ast_factor;
+    ASTVarAccessId *ast_var_id;
+    ASTVarAccessIndex *ast_var_index;
+    ASTVarAccessField *ast_var_field;
+    ASTVarAccessPointer *ast_var_pointer;
+    ASTFactorFunc *ast_factor_func;
+    ASTExpr::ROP rop;
+    ASTSimpleExpr::AOP aop;
+    ASTTerm::MOP mop;
     ASTWritePara::WritePack *write_pack;
     vector<char *> id_list;
 }
@@ -123,6 +134,24 @@ extern void yyerror(const char*);
 %type<ast_expr> BOOLEAN_EXPRESSION
 %type<ast_expr> INITIAL_VARIABLE
 %type<ast_expr> FINAL_VALUE
+%type<ast_expr> EXPRESSION
+%type<ast_expr> INDEX_EXPRESSION
+%type<rop> RELATIONAL_OP
+%type<ast_var_id> ENTIRE_VARIABLE
+%type<ast_var_access> COMPONENT_VARIABLE
+%type<ast_var_access> POINTER_VARIABLE
+%type<ast_var_access> ARRAY_VARIABLE
+%type<ast_var_access> RECORD_VARIABLE
+%type<ast_var_pointer> IDENTIFIED_VARIABLE
+%type<ast_simple_expr> SIMPLE_EXPRESSION
+%type<ast_var_field> FIELD_DESIGNATOR
+%type<aop> ADDING_OP
+%type<ast_term> TERM
+%type<mop> MULTIPLYING_OP
+%type<ast_var_index> INDEXED_VARIABLE
+%type<ast_var_index> INDEX_EXPRESSIONS
+%type<ast_factor> FACTOR
+%type<ast_factor_func> FUNCTION_DESIGNATOR
 %type<ast_const_value> CONSTANT
 %type<ast_const_value> UNSIGNED_CONSTANT
 %type<ast_const_value> SIGNED_NUMBER
@@ -137,8 +166,11 @@ extern void yyerror(const char*);
 %type<text> DOMAIN_TYPE
 %type<text> ORDINAL_TYPE_IDENTIFIER
 %type<text> PROCEDURE_IDENTIFIER
-%type<text> ENTIRE_VARIABLE
 %type<text> CONTROL_VARIABLE
+%type<text> VARIABLE_IDENTIFIER
+%type<text> FIELD_IDENTIFIER
+%type<text> FUNCTION_IDENTIFIER
+%type<text> FIELD_SPECIFIER
 
 %token<token_type> KEY_AND
 %token<token_type> KEY_ARRAY
@@ -764,17 +796,6 @@ ACTUAL_PARA:
         $$ = new ASTActualPara($1, true);
     }
 
-VARIABLE_ACCESS:
-    ENTIRE_VARIABLE {
-        $$ = $1;
-    }
-    | COMPONENT_VARIABLE {
-        $$ = $1;
-    }
-    | IDENTIFIED_VARIABLE {
-        $$ = $1;
-    }
-
 WRITE_PARA:
     EXPRESSION {
         $$ = new ASTWritePara::WritePack($1);
@@ -906,40 +927,91 @@ FINAL_VALUE:
     /* 表达式和变量 */
 
 EXPRESSION:
-    SIMPLE_EXPRESSION
-    | SIMPLE_EXPRESSION RELATIONAL_OP SIMPLE_EXPRESSION
+    SIMPLE_EXPRESSION {
+        $$ = new ASTExpr($1);
+    }
+    | SIMPLE_EXPRESSION RELATIONAL_OP SIMPLE_EXPRESSION {
+        $$ = new ASTExpr($1, $2, $3);
+    }
  
 RELATIONAL_OP:
-    OP_EQ
-    | OP_LT
-    | OP_GT
-    | OP_NOT_EQ
-    | OP_LE
-    | OP_GE
+    OP_EQ {
+        $$ = ASTExpr::EQ;
+    }
+    | OP_LT {
+        $$ = ASTExpr::LT;
+    }
+    | OP_GT {
+        $$ = ASTExpr::GT;
+    }
+    | OP_NOT_EQ {
+        $$ = ASTExpr::NOT_EQ;
+    }
+    | OP_LE {
+        $$ = ASTExpr::LE;
+    }
+    | OP_GE {
+        $$ = ASTExpr::GE;
+    }
+
+VARIABLE_ACCESS:
+    ENTIRE_VARIABLE {
+        $$ = $1;
+    }
+    | COMPONENT_VARIABLE {
+        $$ = $1;
+    }
+    | IDENTIFIED_VARIABLE {
+        $$ = $1;
+    }
 
 FUNCTION_IDENTIFIER:
-    IDENTIFIER
+    IDENTIFIER {
+        $$ = $1;
+    }
 
 ENTIRE_VARIABLE:
-    VARIABLE_IDENTIFIER
+    VARIABLE_IDENTIFIER {
+        $$ = new ASTVarAccessId($1);
+    }
 
 COMPONENT_VARIABLE:
-    INDEXED_VARIABLE
-    | FIELD_DESIGNATOR
+    INDEXED_VARIABLE {
+        $$ = $1;
+    }
+    | FIELD_DESIGNATOR {
+        $$ = $1;
+    }
 
 IDENTIFIED_VARIABLE:
-    POINTER_VARIABLE OP_CARET
+    POINTER_VARIABLE OP_CARET {
+        $$ = new ASTVarAccessPointer($1);
+    }
 
 SIMPLE_EXPRESSION:
-    TERM
-    | SIGN TERM
-    | TERM ADDING_OP TERM
-    | SIGN TERM ADDING_OP TERM
+    TERM {
+        $$ = new ASTSimpleExpr(false, $1);
+    }
+    | SIGN TERM {
+        $$ = new ASTSimpleExpr($1==OP_SUB, $2);
+    }
+    | TERM ADDING_OP TERM {
+        $$ = new ASTSimpleExpr(false, $1, $2, $3);
+    }
+    | SIGN TERM ADDING_OP TERM {
+        $$ = new ASTSimpleExpr($1==OP_SUB, $2, $3, $4);
+    }
 
 ADDING_OP:
-    KEY_OR
-    | OP_ADD
-    | OP_SUB
+    KEY_OR {
+        $$ = ASTSimpleExpr::OR;
+    }
+    | OP_ADD {
+        $$ = ASTSimpleExpr::ADD;
+    }
+    | OP_SUB {
+        $$ = ASTSimpleExpr::SUB;
+    }
 
 SIGN:
     OP_ADD {
@@ -950,60 +1022,115 @@ SIGN:
     }
 
 VARIABLE_IDENTIFIER:
-    IDENTIFIER
+    IDENTIFIER {
+        $$ = $1;
+    }
 
 INDEXED_VARIABLE:
-    ARRAY_VARIABLE OP_L_BCK INDEX_EXPRESSIONS OP_R_BCK
+    ARRAY_VARIABLE OP_L_BCK INDEX_EXPRESSIONS OP_R_BCK {
+        $$ = $3;
+        $$->set_array($1);
+    }
 
 INDEX_EXPRESSIONS:
-    INDEX_EXPRESSION
-    | INDEX_EXPRESSIONS OP_COMMA INDEX_EXPRESSION
+    INDEX_EXPRESSION {
+        $$ = new ASTVarAccessIndex($1);
+    }
+    | INDEX_EXPRESSIONS OP_COMMA INDEX_EXPRESSION {
+        $$ = $1;
+        $$->push_back($3);
+    }
 
 FIELD_DESIGNATOR:
-    RECORD_VARIABLE OP_DOT FIELD_SPECIFIER
+    RECORD_VARIABLE OP_DOT FIELD_SPECIFIER {
+        $$ = new ASTVarAccessField($1, $3);
+    }
 
 POINTER_VARIABLE:
-    VARIABLE_ACCESS
+    VARIABLE_ACCESS {
+        $$ = $1;
+    }
 
 TERM:
-    FACTOR
-    | FACTOR MULTIPLYING_OP FACTOR
+    FACTOR {
+        $$ = new ASTTerm($1);
+    }
+    | FACTOR MULTIPLYING_OP FACTOR {
+        $$ = new ASTTerm($1, $2, $3);
+    }
 
 MULTIPLYING_OP:
-    KEY_AND
-    | KEY_DIV
-    | KEY_MOD
-    | OP_MUL
-    | OP_DIV
+    KEY_AND {
+        $$ = ASTTerm::AND;
+    }
+    | KEY_DIV {
+        $$ = ASTTerm::INT_DIV;
+    }
+    | KEY_MOD {
+        $$ = ASTTerm::MOD;
+    }
+    | OP_MUL {
+        $$ = ASTTerm::MUL;
+    }
+    | OP_DIV {
+        $$ = ASTTerm::FLT_DIV;
+    }
 
 ARRAY_VARIABLE:
-    VARIABLE_ACCESS
+    VARIABLE_ACCESS {
+        $$ = $1;
+    }
 
 INDEX_EXPRESSION:
-    EXPRESSION
+    EXPRESSION {
+        $$ = $1;
+    }
 
 RECORD_VARIABLE:
-    VARIABLE_ACCESS
+    VARIABLE_ACCESS {
+        $$ = $1;
+    }
 
 FIELD_SPECIFIER:
-    FIELD_IDENTIFIER
+    FIELD_IDENTIFIER {
+        $$ = $1;
+    }
 
     /* 注意处理值和引用 */
 
 FACTOR:
-    VARIABLE_ACCESS
-    | UNSIGNED_CONSTANT
-    | FUNCTION_DESIGNATOR
-    | OP_L_PRTS EXPRESSION OP_R_PRTS
-    | KEY_NOT FACTOR
-    | OP_AT VARIABLE_ACCESS
+    VARIABLE_ACCESS {
+        $$ = new ASTFactorVar($1);
+    }
+    | UNSIGNED_CONSTANT {
+        $$ = new ASTFactorConst($1);
+    }
+    | FUNCTION_DESIGNATOR {
+        $$ = $1;
+    }
+    | OP_L_PRTS EXPRESSION OP_R_PRTS {
+        $$ = new ASTFactorExpr($1);
+    }
+    | KEY_NOT FACTOR {
+        $$ = $2;
+        $$->flip_not();
+    }
+    | OP_AT VARIABLE_ACCESS {
+        $$ = new ASTFactorAt($2);
+    }
 
 FIELD_IDENTIFIER:
-    IDENTIFIER
+    IDENTIFIER {
+        $$ = $1;
+    }
 
 FUNCTION_DESIGNATOR:
-    FUNCTION_IDENTIFIER OP_L_PRTS OP_R_PRTS
-    | FUNCTION_IDENTIFIER ACTUAL_PARA_LIST
+    FUNCTION_IDENTIFIER OP_L_PRTS OP_R_PRTS {
+        $$ = new ASTFactorFunc($1);
+    }
+    | FUNCTION_IDENTIFIER ACTUAL_PARA_LIST {
+        $$ = new ASTFactorFunc($1, $2);
+    }
 
 
 %%
