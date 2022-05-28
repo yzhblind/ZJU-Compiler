@@ -37,6 +37,18 @@ extern void yyerror(const char*);
     ASTTypeArray *ast_type_array;
     ASTTypeRecord *ast_type_record;
     ASTTypePointer *ast_type_pointer;
+    ASTProcStmt *ast_proc_stmt;
+    ASTReadPara *ast_read_para;
+    ASTWritePara *ast_write_para;
+    ASTActualPara *ast_actual_para;
+    ASTVarAccess *ast_var_access;
+    ASTAssignStmt *ast_assign_stmt;
+    ASTIfStmt *ast_if_stmt;
+    ASTRepeatStmt *ast_repeat_stmt;
+    ASTWhileStmt *ast_while_stmt;
+    ASTForStmt *ast_for_stmt;
+    ASTExpr *ast_expr;
+    ASTWritePara::WritePack *write_pack;
     vector<char *> id_list;
 }
 
@@ -85,6 +97,32 @@ extern void yyerror(const char*);
 %type<ast_stmt> STATEMENT_PART
 %type<ast_stmt> COMPOUND_STATEMENT
 %type<ast_stmt> STATEMENT_SEQS
+%type<ast_stmt> STATEMENT
+%type<ast_stmt> SIMPLE_STATEMENT
+%type<ast_stmt> STRUCTURED_STATEMENT
+%type<ast_stmt> CONDITIONAL_STATEMENT
+%type<ast_stmt> REPETITIVE_STATEMENT
+%type<ast_if_stmt> IF_STATEMENT
+%type<ast_repeat_stmt> REPEAT_STATEMENT
+%type<ast_while_stmt> WHILE_STATEMENT
+%type<ast_proc_stmt> PROCEDURE_STATEMENT
+%type<ast_proc_stmt> IO_PROCEDURE_STATEMENT
+%type<ast_read_para> READ_PARA_LIST
+%type<ast_read_para> READLN_PARA_LIST
+%type<ast_read_para> VARIABLE_ACCESSES
+%type<ast_write_para> WRITE_PARA_LIST
+%type<ast_write_para> WRITELN_PARA_LIST
+%type<ast_write_para> WRITE_PARAS
+%type<write_pack> WRITE_PARA
+%type<ast_actual_para> ACTUAL_PARA_LIST
+%type<ast_actual_para> ACTUAL_PARAS
+%type<ast_actual_para> ACTUAL_PARA
+%type<ast_var_access> VARIABLE_ACCESS
+%type<ast_assign_stmt> ASSIGNMENT_STATEMENT
+%type<ast_for_stmt> FOR_STATEMENT
+%type<ast_expr> BOOLEAN_EXPRESSION
+%type<ast_expr> INITIAL_VARIABLE
+%type<ast_expr> FINAL_VALUE
 %type<ast_const_value> CONSTANT
 %type<ast_const_value> UNSIGNED_CONSTANT
 %type<ast_const_value> SIGNED_NUMBER
@@ -99,6 +137,8 @@ extern void yyerror(const char*);
 %type<text> DOMAIN_TYPE
 %type<text> ORDINAL_TYPE_IDENTIFIER
 %type<text> PROCEDURE_IDENTIFIER
+%type<text> ENTIRE_VARIABLE
+%type<text> CONTROL_VARIABLE
 
 %token<token_type> KEY_AND
 %token<token_type> KEY_ARRAY
@@ -632,57 +672,119 @@ FIXED_PART:
     /* 语句 */
 
 PROCEDURE_STATEMENT:
-    PROCEDURE_IDENTIFIER ACTUAL_PARA_LIST
-    | PROCEDURE_IDENTIFIER
-    | IO_PROCEDURE_STATEMENT
+    PROCEDURE_IDENTIFIER ACTUAL_PARA_LIST {
+        $$ = new ASTProcStmt($1, $2);
+    }
+    | PROCEDURE_IDENTIFIER {
+        $$ = new ASTProcStmt($1);
+    }
+    | IO_PROCEDURE_STATEMENT {
+        $$ = $1;
+    }
 
 IO_PROCEDURE_STATEMENT:
-    IO_READ READ_PARA_LIST
-    | IO_READLN READLN_PARA_LIST
-    | IO_WRITE WRITE_PARA_LIST
-    | IO_WRITELN WRITELN_PARA_LIST
+    IO_READ READ_PARA_LIST {
+        $$ = new ASTReadStmt(false, $2);
+    }
+    | IO_READLN READLN_PARA_LIST {
+         $$ = new ASTReadStmt(true, $2);
+    }
+    | IO_WRITE WRITE_PARA_LIST {
+        $$ = new ASTWriteStmt(false, $2);
+    }
+    | IO_WRITELN WRITELN_PARA_LIST {
+        $$ = new ASTWriteStmt(true, $2);
+    }
 
 ACTUAL_PARA_LIST:
-    OP_L_PRTS ACTUAL_PARAS OP_R_PRTS
+    OP_L_PRTS ACTUAL_PARAS OP_R_PRTS {
+        $$ = $2;
+    }
 
 ACTUAL_PARAS:
-    ACTUAL_PARAS OP_COMMA ACTUAL_PARA 
-    | ACTUAL_PARA 
+    ACTUAL_PARAS OP_COMMA ACTUAL_PARA {
+        $$ = $1->append($3);
+    }
+    | ACTUAL_PARA {
+        $$ = $1;
+    }
 
 READ_PARA_LIST:
-    OP_L_PRTS VARIABLE_ACCESSES OP_R_PRTS
+    OP_L_PRTS VARIABLE_ACCESSES OP_R_PRTS {
+        $$ = $2;
+    }
 
 VARIABLE_ACCESSES:
-    VARIABLE_ACCESSES OP_COMMA VARIABLE_ACCESS
-    | VARIABLE_ACCESS
+    VARIABLE_ACCESSES OP_COMMA VARIABLE_ACCESS {
+        $$ = $1;
+        $$->push_back($3);
+    }
+    | VARIABLE_ACCESS {
+        $$ = new ASTReadPara($1);
+    }
 
 READLN_PARA_LIST:
-    | OP_L_PRTS VARIABLE_ACCESSES OP_R_PRTS
+    {
+        $$ = nullptr;
+    }
+    | OP_L_PRTS VARIABLE_ACCESSES OP_R_PRTS {
+        $$ = $2;
+    }
 
 WRITE_PARA_LIST:
-    WRITE_PARAS 
+    WRITE_PARAS {
+        $$ = $1;
+    } 
 
 WRITE_PARAS:
-    WRITE_PARAS OP_COMMA WRITE_PARA 
-    | WRITE_PARA 
+    WRITE_PARAS OP_COMMA WRITE_PARA {
+        $$ = $1;
+        $$->push_back($3);
+    } 
+    | WRITE_PARA {
+        $$ = new ASTWritePara($1);
+    } 
 
 WRITELN_PARA_LIST:
-    | WRITE_PARAS
+    {
+        $$ = nullptr;
+    }
+    | WRITE_PARAS {
+        $$ = $1;
+    }
 
 ACTUAL_PARA:
-    EXPRESSION
-    | KEY_PROCEDURE PROCEDURE_IDENTIFIER
-    | KEY_FUNCTION FUNCTION_IDENTIFIER
+    EXPRESSION {
+        $$ = new ASTActualPara($1);
+    }
+    | KEY_PROCEDURE PROCEDURE_IDENTIFIER {
+        $$ = new ASTActualPara($1, false);
+    }
+    | KEY_FUNCTION FUNCTION_IDENTIFIER {
+        $$ = new ASTActualPara($1, true);
+    }
 
 VARIABLE_ACCESS:
-    ENTIRE_VARIABLE
-    | COMPONENT_VARIABLE
-    | IDENTIFIED_VARIABLE
+    ENTIRE_VARIABLE {
+        $$ = $1;
+    }
+    | COMPONENT_VARIABLE {
+        $$ = $1;
+    }
+    | IDENTIFIED_VARIABLE {
+        $$ = $1;
+    }
 
 WRITE_PARA:
-    EXPRESSION
-    | EXPRESSION OP_COLON EXPRESSION
-    | EXPRESSION OP_COLON EXPRESSION OP_COLON EXPRESSION
+    EXPRESSION {
+        $$ = new ASTWritePara::WritePack($1);
+    }
+    | EXPRESSION OP_COLON EXPRESSION {
+        $$ = new ASTWritePara::WritePack($1, $3);
+    }
+    | EXPRESSION OP_COLON EXPRESSION OP_COLON EXPRESSION {
+        $$ = new ASTWritePara::WritePack($1, $3, $5);
+    }
 
 STATEMENT_PART:
     COMPOUND_STATEMENT {
@@ -695,92 +797,111 @@ COMPOUND_STATEMENT:
     }
 
 STATEMENT_SEQS:
-    STATEMENT
-    | STATEMENT_SEQS OP_SEMICOLON STATEMENT
+    STATEMENT {
+        $$ = $1;
+    }
+    | STATEMENT_SEQS OP_SEMICOLON STATEMENT {
+        $$ = $1->append($3);
+    }
 
 STATEMENT:
-    SIMPLE_STATEMENT
-    | STRUCTURED_STATEMENT
+    SIMPLE_STATEMENT {
+        $$ = $1;
+    }
+    | STRUCTURED_STATEMENT {
+        $$ = $1;
+    }
 
 SIMPLE_STATEMENT:
-    EMPTY_STATEMENT
-    | ASSIGNMENT_STATEMENT
-    | PROCEDURE_STATEMENT
+    EMPTY_STATEMENT {
+        $$ = new ASTStmt();
+    }
+    | ASSIGNMENT_STATEMENT {
+        $$ = $1;
+    }
+    | PROCEDURE_STATEMENT {
+        $$ = $1;
+    }
 
 STRUCTURED_STATEMENT:
-    COMPOUND_STATEMENT
-    | CONDITIONAL_STATEMENT
-    | REPETITIVE_STATEMENT
-    | WITH_STATEMENT
+    CONDITIONAL_STATEMENT {
+        $$ = $1;
+    }
+    | REPETITIVE_STATEMENT {
+        $$ = $1;
+    }
 
 EMPTY_STATEMENT:
 
 ASSIGNMENT_STATEMENT:
-    VARIABLE_ACCESS OP_ASSIGN EXPRESSION
-    | KEY_RESULT OP_ASSIGN EXPRESSION
+    VARIABLE_ACCESS OP_ASSIGN EXPRESSION {
+        $$ = new ASTAssignStmt($1, $3);
+    }
+    | KEY_RESULT OP_ASSIGN EXPRESSION {
+        $$ = new ASTAssignStmt($3);
+    }
 
 CONDITIONAL_STATEMENT:
-    IF_STATEMENT
-    | CASE_STATEMENT
+    IF_STATEMENT {
+        $$ = $1;
+    }
 
 REPETITIVE_STATEMENT:
-    REPEAT_STATEMENT
-    | WHILE_STATEMENT
-    | FOR_STATEMENT
-
-WITH_STATEMENT:
-    KEY_WITH RECORD_VARIABLE_LIST KEY_DO STATEMENT
+    REPEAT_STATEMENT {
+        $$ = $1;
+    }
+    | WHILE_STATEMENT {
+        $$ = $1;
+    }
+    | FOR_STATEMENT {
+        $$ = $1;
+    }
 
 IF_STATEMENT:
-    KEY_IF  BOOLEAN_EXPRESSION KEY_THEN STATEMENT
-    | KEY_IF  BOOLEAN_EXPRESSION KEY_THEN STATEMENT KEY_ELSE STATEMENT
-
-CASE_STATEMENT:
-    KEY_CASE CASE_INDEX KEY_OF CASE_LIST_ELEMENTS KEY_END
-    | KEY_CASE CASE_INDEX KEY_OF CASE_LIST_ELEMENTS OP_SEMICOLON KEY_END
-
-CASE_LIST_ELEMENTS:
-    CASE_LIST_ELEMENT
-    | CASE_LIST_ELEMENTS OP_SEMICOLON CASE_LIST_ELEMENT
+    KEY_IF BOOLEAN_EXPRESSION KEY_THEN STATEMENT {
+        $$ = new ASTIfStmt($2, $4, nullptr);
+    }
+    | KEY_IF  BOOLEAN_EXPRESSION KEY_THEN STATEMENT KEY_ELSE STATEMENT {
+        $$ = new ASTIfStmt($2, $4, $6);
+    }
 
 REPEAT_STATEMENT:
-    KEY_REPEAT STATEMENT_SEQS KEY_UNTIL BOOLEAN_EXPRESSION
+    KEY_REPEAT STATEMENT_SEQS KEY_UNTIL BOOLEAN_EXPRESSION {
+        $$ = new ASTRepeat($2, $4);
+    }
 
 WHILE_STATEMENT:
-    KEY_WHILE BOOLEAN_EXPRESSION KEY_DO STATEMENT
+    KEY_WHILE BOOLEAN_EXPRESSION KEY_DO STATEMENT {
+        $$ = new ASTWhileStmt($2, $4);
+    }
 
 FOR_STATEMENT:
-    KEY_FOR CONTROL_VARIABLE OP_ASSIGN INITIAL_VARIABLE KEY_TO FINAL_VALUE KEY_DO STATEMENT
-    | KEY_FOR CONTROL_VARIABLE OP_ASSIGN INITIAL_VARIABLE KEY_DOWNTO FINAL_VALUE KEY_DO STATEMENT
-
-RECORD_VARIABLE_LIST:
-    RECORD_VARIABLE
-    | RECORD_VARIABLE_LIST OP_COMMA RECORD_VARIABLE
+    KEY_FOR CONTROL_VARIABLE OP_ASSIGN INITIAL_VARIABLE KEY_TO FINAL_VALUE KEY_DO STATEMENT {
+        $$ = new ASTForStmt($2, $4, $6, false, $8);
+    }
+    | KEY_FOR CONTROL_VARIABLE OP_ASSIGN INITIAL_VARIABLE KEY_DOWNTO FINAL_VALUE KEY_DO STATEMENT {
+        $$ = new ASTForStmt($2, $4, $6, true, $8);
+    }
 
 BOOLEAN_EXPRESSION:
-    EXPRESSION
-
-CASE_INDEX:
-    EXPRESSION
-
-CASE_LIST_ELEMENT:
-    CASE_CONSTANT_LIST OP_COLON STATEMENT
-
-CASE_CONSTANT_LIST:
-    CASE_CONSTANT
-    | CASE_CONSTANT_LIST OP_COMMA CASE_CONSTANT
-
-CASE_CONSTANT:
-    CONSTANT
+    EXPRESSION {
+        $$ = $1;
+    }
 
 CONTROL_VARIABLE:
-    ENTIRE_VARIABLE
+    ENTIRE_VARIABLE {
+        $$ = $1;
+    }
 
 INITIAL_VARIABLE:
-    EXPRESSION
+    EXPRESSION {
+        $$ = $1;
+    }
 
 FINAL_VALUE:
-    EXPRESSION
+    EXPRESSION {
+        $$ = $1;
+    }
 
     /* 表达式和变量 */
 
