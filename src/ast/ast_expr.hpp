@@ -133,7 +133,7 @@ public:
 	ASTTerm(ASTFactor *left);
 	ASTTerm(ASTFactor *left, MOP mop, ASTFactor* right);
 	~ASTTerm();
-	ASTFactor* left, right;
+	ASTFactor* left, *right;
 	MOP mop;
 };
 
@@ -149,7 +149,7 @@ public:
 	ASTSimpleExpr(bool neg_flag, ASTTerm* left);
 	~ASTSimpleExpr();
 	bool neg_flag;
-	ASTTerm* left, right;
+	ASTTerm* left, *right;
 	AOP aop;
 };
 
@@ -167,6 +167,6 @@ public:
 	ASTExpr(ASTSimpleExpr* left, ROP op, ASTSimpleExpr* right);
 	ASTExpr(ASTSimpleExpr* left);
 	~ASTExpr();
-	ASTSimpleExpr* left, right;
+	ASTSimpleExpr* left, *right;
 	ROP rop;
 };

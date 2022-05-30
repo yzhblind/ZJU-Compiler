@@ -82,7 +82,7 @@ public:
     ASTAssignStmt(ASTExpr *right);
     ~ASTAssignStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
-    // Èç¹ûleftÎªnullptrËµÃ÷ÊÇº¯Êı·µ»ØÖµ¸³ÖµÓï¾ä
+    // å¦‚æœleftæ˜¯nullptråˆ™ä»£è¡¨æ˜¯å‡½æ•°è¿”å›èµ‹å€¼è¯­å¥
     ASTVarAccess* left;
     ASTExpr* right;
 };

@@ -217,7 +217,7 @@ ASTSimpleExpr::~ASTSimpleExpr()
 ASTExpr::ASTExpr(ASTSimpleExpr* left, ROP rop, ASTSimpleExpr* right)
 {
 	this->left = left;
-	this->op = op;
+	this->rop = rop;
 	this->right = right;
 }
 

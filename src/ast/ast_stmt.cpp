@@ -186,14 +186,14 @@ ASTForStmt::ASTForStmt(char* loop_var, ASTExpr* init_value, ASTExpr* final_value
     this->init_value = init_value;
     this->final_value = final_value;
     this->is_downto = is_downto;
-    this->loop_body = loop_body
+    this->loop_body = loop_body;
 }
 
 ASTForStmt::~ASTForStmt()
 {
-    if (init)
-        delete init;
-    if (final)
+    if (init_value)
+        delete init_value;
+    if (final_value)
         delete final_value;
     if (loop_body)
         delete loop_body;
