@@ -137,6 +137,7 @@ public:
         WRITE
     };
     virtual ASTProcStmt::TypeKind get_proc_type();
+    // 若为空同样可判断此为输入输出语句
     string id;
     ASTActualPara *actual_para;
 };

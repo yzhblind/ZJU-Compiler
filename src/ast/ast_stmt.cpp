@@ -218,7 +218,8 @@ ASTStmt::TypeKind ASTForStmt::get_stmt_type()
 
 ASTProcStmt::ASTProcStmt(char *id, ASTActualPara *para)
 {
-    this->id = string(id);
+    if (id)
+        this->id = string(id);
     this->actual_para = para;
 }
 
