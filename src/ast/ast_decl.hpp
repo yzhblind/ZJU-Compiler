@@ -45,7 +45,6 @@ public:
     ASTConstDef *next_const_def;
 };
 
-class ASTVarDecl;
 // 定义类型节点，类型类是纯虚类，只作为指针使用
 class ASTType : public ASTNode
 {

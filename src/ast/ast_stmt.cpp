@@ -33,7 +33,7 @@ ASTActualPara::TypeKind ASTActualPara::get_type()
     return type;
 }
 
-ASTActualPara* ASTActualPara::append(ASTActualPara *next)
+ASTActualPara *ASTActualPara::append(ASTActualPara *next)
 {
     next_actual_para = next;
     return this;
@@ -56,6 +56,16 @@ void ASTReadPara::push_back(ASTVarAccess *next)
     read_para.push_back(next);
 }
 
+WritePack::~WritePack()
+{
+    if (value)
+        delete value;
+    if (len)
+        delete len;
+    if (frac_len)
+        delete frac_len;
+}
+
 ASTWritePara::~ASTWritePara()
 {
     for (int i = 0; i < write_para.size(); ++i)
@@ -63,12 +73,12 @@ ASTWritePara::~ASTWritePara()
             delete write_para[i];
 }
 
-ASTWritePara::ASTWritePara(WritePack* start)
+ASTWritePara::ASTWritePara(WritePack *start)
 {
     write_para.push_back(start);
 }
 
-void ASTWritePara::push_back(WritePack* next)
+void ASTWritePara::push_back(WritePack *next)
 {
     write_para.push_back(next);
 }
@@ -84,7 +94,7 @@ ASTStmt::~ASTStmt()
         delete next_stmt;
 }
 
-ASTStmt* ASTStmt::append(ASTStmt* next)
+ASTStmt *ASTStmt::append(ASTStmt *next)
 {
     next_stmt = next;
     return this;
@@ -95,13 +105,13 @@ ASTStmt::TypeKind ASTStmt::get_stmt_type()
     return ASTStmt::TypeKind(EMPTY);
 }
 
-ASTAssignStmt::ASTAssignStmt(ASTVarAccess* left, ASTExpr* right)
+ASTAssignStmt::ASTAssignStmt(ASTVarAccess *left, ASTExpr *right)
 {
     this->left = left;
     this->right = right;
 }
 
-ASTAssignStmt::ASTAssignStmt(ASTExpr* right)
+ASTAssignStmt::ASTAssignStmt(ASTExpr *right)
 {
     this->left = nullptr;
     this->right = right;
@@ -120,7 +130,7 @@ ASTStmt::TypeKind ASTAssignStmt::get_stmt_type()
     return ASTStmt::TypeKind(ASSIGN);
 }
 
-ASTIfStmt::ASTIfStmt(ASTExpr* cond, ASTStmt* true_block, ASTStmt* false_block)
+ASTIfStmt::ASTIfStmt(ASTExpr *cond, ASTStmt *true_block, ASTStmt *false_block)
 {
     this->cond = cond;
     this->true_block = true_block;
@@ -142,7 +152,7 @@ ASTStmt::TypeKind ASTIfStmt::get_stmt_type()
     return ASTStmt::TypeKind(IF);
 }
 
-ASTRepeatStmt::ASTRepeatStmt(ASTStmt* loop_body, ASTExpr* cond)
+ASTRepeatStmt::ASTRepeatStmt(ASTStmt *loop_body, ASTExpr *cond)
 {
     this->loop_body = loop_body;
     this->cond = cond;
@@ -161,7 +171,7 @@ ASTStmt::TypeKind ASTRepeatStmt::get_stmt_type()
     return ASTStmt::TypeKind(REPEAT);
 }
 
-ASTWhileStmt::ASTWhileStmt(ASTExpr* cond, ASTStmt* loop_body)
+ASTWhileStmt::ASTWhileStmt(ASTExpr *cond, ASTStmt *loop_body)
 {
     this->loop_body = loop_body;
     this->cond = cond;
@@ -180,9 +190,9 @@ ASTStmt::TypeKind ASTWhileStmt::get_stmt_type()
     return ASTStmt::TypeKind(WHILE);
 }
 
-ASTForStmt::ASTForStmt(char* loop_var, ASTExpr* init_value, ASTExpr* final_value, bool is_downto, ASTStmt* loop_body)
+ASTForStmt::ASTForStmt(ASTVarAccessId *loop_var, ASTExpr *init_value, ASTExpr *final_value, bool is_downto, ASTStmt *loop_body)
 {
-    this->loop_var = string(loop_var);
+    this->loop_var = loop_var;
     this->init_value = init_value;
     this->final_value = final_value;
     this->is_downto = is_downto;
@@ -191,6 +201,8 @@ ASTForStmt::ASTForStmt(char* loop_var, ASTExpr* init_value, ASTExpr* final_value
 
 ASTForStmt::~ASTForStmt()
 {
+    if (loop_var)
+        delete loop_var;
     if (init_value)
         delete init_value;
     if (final_value)
@@ -204,7 +216,7 @@ ASTStmt::TypeKind ASTForStmt::get_stmt_type()
     return ASTStmt::TypeKind(FOR);
 }
 
-ASTProcStmt::ASTProcStmt(char* id, ASTActualPara* para)
+ASTProcStmt::ASTProcStmt(char *id, ASTActualPara *para)
 {
     this->id = string(id);
     this->actual_para = para;
@@ -226,7 +238,7 @@ ASTProcStmt::TypeKind ASTProcStmt::get_proc_type()
     return ASTProcStmt::TypeKind(NORMAL);
 }
 
-ASTReadStmt::ASTReadStmt(bool with_newline, ASTReadPara* para) : ASTProcStmt(nullptr)
+ASTReadStmt::ASTReadStmt(bool with_newline, ASTReadPara *para) : ASTProcStmt(nullptr)
 {
     newline = with_newline;
     this->para = para;
@@ -243,7 +255,7 @@ ASTProcStmt::TypeKind ASTReadStmt::get_proc_type()
     return ASTProcStmt::TypeKind(READ);
 }
 
-ASTWriteStmt::ASTWriteStmt(bool with_newline, ASTWritePara* para) : ASTProcStmt(nullptr)
+ASTWriteStmt::ASTWriteStmt(bool with_newline, ASTWritePara *para) : ASTProcStmt(nullptr)
 {
     newline = with_newline;
     this->para = para;

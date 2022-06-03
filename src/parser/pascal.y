@@ -2,12 +2,13 @@
 %define parse.error verbose
 
 %code requires {
+#include"ast/ast_all.hpp"
 #include<cstdlib>
 #include<cstdint>
+extern ASTRoot *root_entry;
 }
 
 %{
-extern ASTRoot *root_entry;
 extern int yylex();
 extern void yyerror(const char*);
 %}
@@ -59,8 +60,8 @@ extern void yyerror(const char*);
     ASTExpr::ROP rop;
     ASTSimpleExpr::AOP aop;
     ASTTerm::MOP mop;
-    ASTWritePara::WritePack *write_pack;
-    vector<char *> id_list;
+    WritePack *write_pack;
+    vector<char *> *id_list;
 }
 
 %type<ast_root> PROGRAM_BLOCK
@@ -137,6 +138,7 @@ extern void yyerror(const char*);
 %type<ast_expr> EXPRESSION
 %type<ast_expr> INDEX_EXPRESSION
 %type<rop> RELATIONAL_OP
+%type<ast_var_id> CONTROL_VARIABLE
 %type<ast_var_id> ENTIRE_VARIABLE
 %type<ast_var_access> COMPONENT_VARIABLE
 %type<ast_var_access> POINTER_VARIABLE
@@ -166,7 +168,6 @@ extern void yyerror(const char*);
 %type<text> DOMAIN_TYPE
 %type<text> ORDINAL_TYPE_IDENTIFIER
 %type<text> PROCEDURE_IDENTIFIER
-%type<text> CONTROL_VARIABLE
 %type<text> VARIABLE_IDENTIFIER
 %type<text> FIELD_IDENTIFIER
 %type<text> FUNCTION_IDENTIFIER
@@ -269,7 +270,7 @@ BLOCK:
         $$ = new ASTRoot($1, $2, $3, $4, $5);
     }
     | CONST_DEFS TYPE_DEFS VAR_DECLS STATEMENT_PART {
-        $$ = new ASTRoot($1, $2, $3, nullptr, $5);
+        $$ = new ASTRoot($1, $2, $3, nullptr, $4);
     }
 
     /* 声明和类型定义 */
@@ -334,7 +335,7 @@ VAR_DECL_SEQ:
 
 VAR_DECL:
     IDENTIFIER_LIST OP_COLON TYPE_DENOTER {
-        $$ = new ASTVarDecl($1, $3);
+        $$ = new ASTVarDecl(*$1, $3);
     }
 
 PROCEDURE_FUNCTION_DECLS:
@@ -387,7 +388,7 @@ PROCEDURE_HEADING:
 
 PROCEDURE_BLOCK:
     CONST_DEFS TYPE_DEFS VAR_DECLS STATEMENT_PART {
-        $$ = new ASTProcFuncBlock($1, $2, $3, $3);
+        $$ = new ASTProcFuncBlock($1, $2, $3, $4);
     }
 
 PROCEDURE_IDENTIFIER:
@@ -423,12 +424,12 @@ FUNCTION_HEADING:
         $$ = new ASTFuncDecl($2, $3, $5);
     }
     | KEY_FUNCTION IDENTIFIER OP_COLON RESULT_TYPE {
-        $$ = new ASTFuncDecl($2, nullptr, $5);
+        $$ = new ASTFuncDecl($2, nullptr, $4);
     }
 
 FUNCTION_BLOCK:
     CONST_DEFS TYPE_DEFS VAR_DECLS STATEMENT_PART {
-        $$ = new ASTProcFuncBlock($1, $2, $3, $3);
+        $$ = new ASTProcFuncBlock($1, $2, $3, $4);
     }
 
 FORMAL_PARAMETER_LIST:
@@ -464,12 +465,12 @@ FORMAL_PARAMETER_SECTION:
 
 VALUE_PARA_SPEC:
     IDENTIFIER_LIST OP_COLON TYPE_IDENTIFIER {
-        $$ = new ASTVarDecl($1, new ASTTypeId($3));
+        $$ = new ASTVarDecl(*$1, new ASTTypeId($3));
     }
 
 VARIABLE_PARA_SPEC:
     KEY_VAR IDENTIFIER_LIST OP_COLON TYPE_IDENTIFIER {
-        $$ = new ASTVarDecl($2, new ASTTypeId($4));
+        $$ = new ASTVarDecl(*$2, new ASTTypeId($4));
     }
 
 PROCEDURE_PARA_SEPC:
@@ -610,13 +611,13 @@ NEW_STRUCTURED_TYPE:
         $$ = $1;
     }
     | KEY_PACKED UNPACKED_STRUCTURE_TYPE {
-        $1->set_packed_flag();
-        $$ = $1;
+        $2->set_packed_flag();
+        $$ = $2;
     }
 
 NEW_POINTER_TYPE:
     OP_CARET DOMAIN_TYPE {
-        $$ = new ASTTypePointer($2);
+        $$ = new ASTTypePointer(new ASTTypeId($2));
     }
 
 SUBRANGE_TYPE:
@@ -683,7 +684,7 @@ RECORD_TYPE:
 
 RECORD_SECTION:
     IDENTIFIER_LIST OP_COLON TYPE_DENOTER {
-        $$ = new ASTVarDecl($1, $3);
+        $$ = new ASTVarDecl(*$1, $3);
     }
 
 FIELD_LIST:
@@ -790,21 +791,21 @@ ACTUAL_PARA:
         $$ = new ASTActualPara($1);
     }
     | KEY_PROCEDURE PROCEDURE_IDENTIFIER {
-        $$ = new ASTActualPara($1, false);
+        $$ = new ASTActualPara($2, false);
     }
     | KEY_FUNCTION FUNCTION_IDENTIFIER {
-        $$ = new ASTActualPara($1, true);
+        $$ = new ASTActualPara($2, true);
     }
 
 WRITE_PARA:
     EXPRESSION {
-        $$ = new ASTWritePara::WritePack($1);
+        $$ = new WritePack($1);
     }
     | EXPRESSION OP_COLON EXPRESSION {
-        $$ = new ASTWritePara::WritePack($1, $3);
+        $$ = new WritePack($1, $3);
     }
     | EXPRESSION OP_COLON EXPRESSION OP_COLON EXPRESSION {
-        $$ = new ASTWritePara::WritePack($1, $3, $5);
+        $$ = new WritePack($1, $3, $5);
     }
 
 STATEMENT_PART:
@@ -888,7 +889,7 @@ IF_STATEMENT:
 
 REPEAT_STATEMENT:
     KEY_REPEAT STATEMENT_SEQS KEY_UNTIL BOOLEAN_EXPRESSION {
-        $$ = new ASTRepeat($2, $4);
+        $$ = new ASTRepeatStmt($2, $4);
     }
 
 WHILE_STATEMENT:
@@ -1109,7 +1110,7 @@ FACTOR:
         $$ = $1;
     }
     | OP_L_PRTS EXPRESSION OP_R_PRTS {
-        $$ = new ASTFactorExpr($1);
+        $$ = new ASTFactorExpr($2);
     }
     | KEY_NOT FACTOR {
         $$ = $2;
@@ -1134,9 +1135,3 @@ FUNCTION_DESIGNATOR:
 
 
 %%
-
-/* int main()
-{
-    yyparse();
-    return 0;
-} */

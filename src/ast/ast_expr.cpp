@@ -234,3 +234,7 @@ ASTExpr::~ASTExpr()
 	if (right)
 		delete right;
 }
+
+ASTVarAccess::~ASTVarAccess()
+{
+}

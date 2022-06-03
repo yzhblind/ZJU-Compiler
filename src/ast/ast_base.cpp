@@ -14,3 +14,7 @@ uint32_t ASTNode::get_col_no() const
 {
     return column_no;
 }
+
+ASTNode::~ASTNode()
+{
+}

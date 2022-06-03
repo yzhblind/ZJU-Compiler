@@ -46,6 +46,7 @@ ASTParameter::~ASTParameter()
 ASTParameter *ASTParameter::append(ASTParameter *next)
 {
     next_para = next;
+    return this;
 }
 
 ASTParameter::TypeKind ASTParameter::get_type()
@@ -86,6 +87,7 @@ ASTProcFuncDecl::~ASTProcFuncDecl()
 ASTProcFuncDecl *ASTProcFuncDecl::append(ASTProcFuncDecl *next)
 {
     next_proc_func_decl = next;
+    return this;
 }
 
 void ASTProcFuncDecl::set_forward()

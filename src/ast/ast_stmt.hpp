@@ -30,26 +30,19 @@ public:
     vector<ASTVarAccess *> read_para;
 };
 
+struct WritePack
+{
+    WritePack(ASTExpr *value, ASTExpr *len = nullptr, ASTExpr *frac_len = nullptr) : value(value), len(len), frac_len(frac_len) {}
+    ~WritePack();
+    ASTExpr *value;
+    ASTExpr *len;
+    ASTExpr *frac_len;
+};
+
 class ASTWritePara : public ASTNode
 {
 public:
     ~ASTWritePara();
-    struct WritePack
-    {
-        WritePack(ASTExpr *value, ASTExpr *len = nullptr, ASTExpr *frac_len = nullptr) : value(value), len(len), frac_len(frac_len) {}
-        ~WritePack()
-        {
-            if (value)
-                delete value;
-            if (len)
-                delete len;
-            if (frac_len)
-                delete frac_len;
-        }
-        ASTExpr *value;
-        ASTExpr *len;
-        ASTExpr *frac_len;
-    };
     ASTWritePara(WritePack *start);
     void push_back(WritePack *next);
     vector<WritePack *> write_para;
@@ -83,8 +76,8 @@ public:
     ~ASTAssignStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
     // 如果left是nullptr则代表是函数返回赋值语句
-    ASTVarAccess* left;
-    ASTExpr* right;
+    ASTVarAccess *left;
+    ASTExpr *right;
 };
 
 class ASTIfStmt : public ASTStmt
@@ -93,9 +86,9 @@ public:
     ASTIfStmt(ASTExpr *cond, ASTStmt *true_block, ASTStmt *false_block);
     ~ASTIfStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
-    ASTExpr* cond;
-    ASTStmt* true_block;
-    ASTStmt* false_block;
+    ASTExpr *cond;
+    ASTStmt *true_block;
+    ASTStmt *false_block;
 };
 
 class ASTRepeatStmt : public ASTStmt
@@ -104,8 +97,8 @@ public:
     ASTRepeatStmt(ASTStmt *loop_body, ASTExpr *cond);
     ~ASTRepeatStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
-    ASTStmt* loop_body;
-    ASTExpr* cond;
+    ASTStmt *loop_body;
+    ASTExpr *cond;
 };
 
 class ASTWhileStmt : public ASTStmt
@@ -114,21 +107,21 @@ public:
     ASTWhileStmt(ASTExpr *cond, ASTStmt *loop_body);
     ~ASTWhileStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
-    ASTExpr* cond;
-    ASTStmt* loop_body;
+    ASTExpr *cond;
+    ASTStmt *loop_body;
 };
 
 class ASTForStmt : public ASTStmt
 {
 public:
-    ASTForStmt(char *loop_var, ASTExpr *init_value, ASTExpr *final_value, bool is_downto, ASTStmt *loop_body);
+    ASTForStmt(ASTVarAccessId *loop_var, ASTExpr *init_value, ASTExpr *final_value, bool is_downto, ASTStmt *loop_body);
     ~ASTForStmt();
     virtual ASTStmt::TypeKind get_stmt_type();
-    string loop_var;
-    ASTExpr* init_value;
-    ASTExpr* final_value;
+    ASTVarAccessId *loop_var;
+    ASTExpr *init_value;
+    ASTExpr *final_value;
     bool is_downto;
-    ASTStmt* loop_body;
+    ASTStmt *loop_body;
 };
 
 class ASTProcStmt : public ASTStmt
@@ -155,7 +148,7 @@ public:
     ~ASTReadStmt();
     ASTProcStmt::TypeKind get_proc_type();
     bool newline;
-    ASTReadPara* para;
+    ASTReadPara *para;
 };
 
 class ASTWriteStmt : public ASTProcStmt
@@ -165,5 +158,5 @@ public:
     ~ASTWriteStmt();
     ASTProcStmt::TypeKind get_proc_type();
     bool newline;
-    ASTWritePara* para;
+    ASTWritePara *para;
 };

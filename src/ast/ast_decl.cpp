@@ -58,6 +58,10 @@ ASTConstDef *ASTConstDef::append(ASTConstDef *next)
     return this;
 }
 
+ASTType::~ASTType()
+{
+}
+
 ASTTypeId::ASTTypeId(char *id)
 {
     this->id = string(id);
@@ -103,6 +107,10 @@ ASTType::TypeKind ASTTypeSubrange::get_type()
 ASTTypeStructure::ASTTypeStructure()
 {
     packed_flag = false;
+}
+
+ASTTypeStructure::~ASTTypeStructure()
+{
 }
 
 void ASTTypeStructure::set_packed_flag()
@@ -188,6 +196,7 @@ ASTTypeDef::~ASTTypeDef()
 ASTTypeDef *ASTTypeDef::append(ASTTypeDef *next)
 {
     next_type_def = next;
+    return this;
 }
 
 ASTVarDecl::ASTVarDecl(vector<char *> &id, ASTType *type)
@@ -209,4 +218,5 @@ ASTVarDecl::~ASTVarDecl()
 ASTVarDecl *ASTVarDecl::append(ASTVarDecl *next)
 {
     next_var_decl = next;
+    return this;
 }
