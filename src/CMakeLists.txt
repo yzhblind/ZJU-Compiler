@@ -7,12 +7,14 @@ find_package(LLVM REQUIRED CONFIG)
 include_directories(.)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-include_directories(/usr/include/llvm)
-include_directories(/usr/include/llvm-c)
+include_directories(/usr/include/llvm-10)
+include_directories(/usr/include/llvm-c-10)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 aux_source_directory(ast AST_SOURCE)
+
+aux_source_directory(backend LLVM_SOURCE)
 
 add_custom_command(
     OUTPUT pascal.l.cpp
@@ -27,5 +29,8 @@ add_custom_command(
 )
 
 add_executable(mypc
-    ${AST_SOURCE} pascal.l.cpp
+    ${LLVM_SOURCE} ${AST_SOURCE} pascal.l.cpp
     pascal.y.cpp pascal.y.hpp main.cpp)
+
+llvm_map_components_to_libnames(llvm_libs support core irreader)    
+target_link_libraries(mypc ${llvm_libs})
