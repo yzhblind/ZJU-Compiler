@@ -8,7 +8,6 @@ IR_builder::~IR_builder() {
 
 }
 
-
 void IR_builder::CodeGen(ASTRoot* root) {
     //cout << "!" << endl;
     Function* Main = Function::Create(FunctionType::get(Type::getInt64Ty(Context), { Type::getInt64Ty(Context) }, false), Function::ExternalLinkage, "Main", M);
@@ -19,7 +18,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
 
     map<string, Value*> Value_map;
 
-    auto get_constant_value = [&](ASTConstValue* val) {
+    function<Value* (ASTConstValue*)> get_constant_value = [&](ASTConstValue* val) {
         auto type = val->value_type;
         using T = ASTConstValue::ConstType;
         if (type == T::INT) {
@@ -42,14 +41,36 @@ void IR_builder::CodeGen(ASTRoot* root) {
         }
     };
 
+    function<Value* (ASTVarAccess*)> var_access = [&](ASTVarAccess* var) {
+        auto type = var->get_type();
+        using T = ASTVarAccess::TypeKind;
+        if (type == T::ID) {
+            return Value_map[dynamic_cast<ASTVarAccessId*>(var)->id];
+        }
+        else if (type == T::INDEX) {
 
-    auto get_var_value = [&](ASTType* val) {
+        }
+        else if (type == T::FIELD) {
+
+        }
+        else if (type == T::PTR) {
+
+        }
+    };
+
+    function<Value* (ASTType*)>build_var = [&](ASTType* val) {
         auto type = val->get_type();
         using T = ASTType::TypeKind;
-
-        return builder.getInt64(0);
         if (type == T::ID) {
-
+            auto ret = dynamic_cast<ASTTypeId*>(val);
+            if (ret->id == "integer") {
+                Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
+                return ret;
+            }
+            else if (ret->id == "real") {
+                Value* ret = builder.CreateAlloca(Type::getDoubleTy(Context));
+                return ret;
+            }
         } //...
     };
 
@@ -63,9 +84,9 @@ void IR_builder::CodeGen(ASTRoot* root) {
                     using T = ASTFactor::TypeKind;
                     auto type = expr->get_type();
 
-
                     if (type == T::VAR) {
-
+                        Value* ret = builder.CreateLoad(Type::getInt64Ty(Context), var_access(dynamic_cast<ASTFactorVar*>(expr)->var));
+                        return ret;
                     }
                     else if (type == T::CONST) {
                         return get_constant_value(dynamic_cast<ASTFactorConst*>(expr)->value);
@@ -82,7 +103,19 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 };
 
                 if (expr->right) {
-
+                    auto type = expr->mop;
+                    using T = ASTTerm::MOP;
+                    Value* ret;
+                    if (type == T::AND)
+                        ret = builder.CreateAnd(get_factor(expr->left), get_factor(expr->right));
+                    else if (type == T::INT_DIV)
+                        ret = builder.CreateSDiv(get_factor(expr->left), get_factor(expr->right));
+                    else if (type == T::MOD)
+                        ret = builder.CreateSRem(get_factor(expr->left), get_factor(expr->right));
+                    else if (type == T::MUL)
+                        ret = builder.CreateMul(get_factor(expr->left), get_factor(expr->right));
+                    else if (type == T::FLT_DIV)
+                        ret = builder.CreateFDiv(get_factor(expr->left), get_factor(expr->right));
                 }
                 return get_factor(expr->left);
             };
@@ -93,15 +126,12 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 using T = ASTSimpleExpr::AOP;
                 Value* ret;
 
-                if (type == T::ADD) {
+                if (type == T::ADD)
                     ret = builder.CreateAdd(get_term(expr->left), get_term(expr->right));
-                }
-                else if (type == T::SUB) {
+                else if (type == T::SUB)
                     ret = builder.CreateSub(get_term(expr->left), get_term(expr->right));
-                }
-                else if (type == T::OR) {
+                else if (type == T::OR)
                     ret = builder.CreateOr(get_term(expr->left), get_term(expr->right));
-                }
                 return ret;
             }
 
@@ -110,6 +140,24 @@ void IR_builder::CodeGen(ASTRoot* root) {
 
         if (expr->right) {
             //do sth
+            auto type = expr->rop;
+            using T = ASTExpr::ROP;
+            Value* ret;
+            //这里还没有区分整数和浮点数
+
+            if (type == T::EQ)
+                ret = builder.CreateICmpEQ(get_simple(expr->left), get_simple(expr->right));
+            else if (type == T::LT)
+                ret = builder.CreateICmpSLT(get_simple(expr->left), get_simple(expr->right));
+            else if (type == T::GT)
+                ret = builder.CreateICmpSGT(get_simple(expr->left), get_simple(expr->right));
+            else if (type == T::NOT_EQ)
+                ret = builder.CreateICmpNE(get_simple(expr->left), get_simple(expr->right));
+            else if (type == T::LE)
+                ret = builder.CreateICmpSLE(get_simple(expr->left), get_simple(expr->right));
+            else if (type == T::GE)
+                ret = builder.CreateICmpSGE(get_simple(expr->left), get_simple(expr->right));
+
             return get_simple(expr->left);
         }
         return get_simple(expr->left);
@@ -125,7 +173,8 @@ void IR_builder::CodeGen(ASTRoot* root) {
         else if (type == T::ASSIGN) {
             auto it = dynamic_cast<ASTAssignStmt*>(stmt);
             Value* right = get_exp_value(it->right);
-            builder.CreateRet(right);
+            Value* left = var_access(it->left);
+            builder.CreateStore(left, right);
         }
         else if (type == T::PROCEDURE_CALL) {
 
@@ -154,6 +203,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
     }
     //type_def是干什么用的?
     //typedef/using in cpp?
+    //好像懂了
     {
         auto it = root->type_def;
         while (it) {
@@ -167,8 +217,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
         while (it) {
             //do sth
             for (string str : it->id_list) {
-                Value_map[str] = get_var_value(it->var_type);
-                //need fill in
+                Value_map[str] = build_var(it->var_type);
             }
             it = it->next_var_decl;
         }
