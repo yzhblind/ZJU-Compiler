@@ -223,8 +223,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 ret = builder.CreateICmpSLE(get_simple(expr->left), get_simple(expr->right));
             else if (type == T::GE)
                 ret = builder.CreateICmpSGE(get_simple(expr->left), get_simple(expr->right));
-
-            return get_simple(expr->left);
+            return ret;
         }
         return get_simple(expr->left);
     };
@@ -245,15 +244,22 @@ void IR_builder::CodeGen(ASTRoot* root) {
         else if (type == T::IF) {
             auto it = dynamic_cast<ASTIfStmt*>(stmt);
 
+            auto cur = builder.GetInsertBlock();
+
             BasicBlock* True_Block = BasicBlock::Create(Context, pref + "true_block", Main);
+            BasicBlock* False_Block = BasicBlock::Create(Context, pref + "false_block", Main);
+            BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Main);
+            builder.CreateCondBr(get_exp_value(it->cond), True_Block, False_Block);
+            
             builder.SetInsertPoint(True_Block);
             Stmt_Gen(pref + "IF_True", it->true_block);
+            builder.CreateBr(Cont_Block);//back
 
-            BasicBlock* False_Block = BasicBlock::Create(Context, pref + "false_block", Main);
             builder.SetInsertPoint(False_Block);
             Stmt_Gen(pref + "IF_False", it->false_block);
+            builder.CreateBr(Cont_Block);//back
 
-            builder.CreateCondBr(get_exp_value(it->cond), True_Block, False_Block);
+            builder.SetInsertPoint(Cont_Block);
         }
         else if (type == T::REPEAT) {
 
