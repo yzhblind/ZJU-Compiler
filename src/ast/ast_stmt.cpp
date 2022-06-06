@@ -35,7 +35,10 @@ ASTActualPara::TypeKind ASTActualPara::get_type()
 
 ASTActualPara *ASTActualPara::append(ASTActualPara *next)
 {
-    next_actual_para = next;
+    ASTActualPara *it = this;
+    while (it->next_actual_para != nullptr)
+        it = it->next_actual_para;
+    it->next_actual_para = next;
     return this;
 }
 
@@ -96,7 +99,10 @@ ASTStmt::~ASTStmt()
 
 ASTStmt *ASTStmt::append(ASTStmt *next)
 {
-    next_stmt = next;
+    ASTStmt *it = this;
+    while (it->next_stmt != nullptr)
+        it = it->next_stmt;
+    it->next_stmt = next;
     return this;
 }
 

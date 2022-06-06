@@ -45,7 +45,10 @@ ASTParameter::~ASTParameter()
 
 ASTParameter *ASTParameter::append(ASTParameter *next)
 {
-    next_para = next;
+    ASTParameter *it = this;
+    while (it->next_para != nullptr)
+        it = it->next_para;
+    it->next_para = next;
     return this;
 }
 
@@ -86,7 +89,10 @@ ASTProcFuncDecl::~ASTProcFuncDecl()
 
 ASTProcFuncDecl *ASTProcFuncDecl::append(ASTProcFuncDecl *next)
 {
-    next_proc_func_decl = next;
+    ASTProcFuncDecl *it;
+    while (it->next_proc_func_decl != nullptr)
+        it = it->next_proc_func_decl;
+    it->next_proc_func_decl = next;
     return this;
 }
 

@@ -7,8 +7,11 @@ ASTRoot* root_entry = nullptr;
 
 int main()
 {
-    freopen("/home/l1ll5/ZJU-Compiler/test/aplusb.pas", "r", stdin);
+    freopen("../../test/aplusb.pas", "r", stdin);
     yyparse();
+    cout << root_entry->stmt->get_stmt_type() << endl;
+    cout << root_entry->stmt->next_stmt->get_stmt_type() << endl;
+    cout << "----------------------------------------" << endl;
     IR_builder IR;
     IR.CodeGen(root_entry);
     return 0;

@@ -54,7 +54,10 @@ ASTConstDef::~ASTConstDef()
 
 ASTConstDef *ASTConstDef::append(ASTConstDef *next)
 {
-    next_const_def = next;
+    ASTConstDef *it = this;
+    while (it->next_const_def != nullptr)
+        it = it->next_const_def;
+    it->next_const_def = next;
     return this;
 }
 
@@ -195,7 +198,10 @@ ASTTypeDef::~ASTTypeDef()
 
 ASTTypeDef *ASTTypeDef::append(ASTTypeDef *next)
 {
-    next_type_def = next;
+    ASTTypeDef *it = this;
+    while (it->next_type_def != nullptr)
+        it = it->next_type_def;
+    it->next_type_def = next;
     return this;
 }
 
@@ -217,6 +223,9 @@ ASTVarDecl::~ASTVarDecl()
 
 ASTVarDecl *ASTVarDecl::append(ASTVarDecl *next)
 {
-    next_var_decl = next;
+    ASTVarDecl *it = this;
+    while (it->next_var_decl != nullptr)
+        it = it->next_var_decl;
+    it->next_var_decl = next;
     return this;
 }
