@@ -3,9 +3,12 @@ PROGRAM Add(input, output);
         A = 50;
         B = 60;
     VAR
-        C, D: integer;
+        C, D, E: integer;
 
     BEGIN
-        C := A - B;
-        D := C - A;
+        E := A + B;
+        IF A > B THEN
+            C := A + B
+        ELSE 
+            D := A - B;
     END.

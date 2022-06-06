@@ -61,6 +61,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
     function<Value* (ASTType*)>build_var = [&](ASTType* val) {
         auto type = val->get_type();
         using T = ASTType::TypeKind;
+        Value* ret;
         if (type == T::ID) {
             auto ret = dynamic_cast<ASTTypeId*>(val);
             if (ret->id == "integer") {
@@ -163,8 +164,9 @@ void IR_builder::CodeGen(ASTRoot* root) {
         return get_simple(expr->left);
     };
 
-    function<void(const string&, ASTStmt*, IRBuilder<>)> Stmt_Gen = [&](const string& pref, ASTStmt* stmt, IRBuilder<> builder) { //这里传拷贝好奇怪
+    function<void(const string&, ASTStmt*)> Stmt_Gen = [&](const string& pref, ASTStmt* stmt) {
         auto type = stmt->get_stmt_type();
+        cout << type << endl;
         using T = ASTStmt::TypeKind;
         if (type == T::EMPTY) {
             //do nothing
@@ -183,12 +185,12 @@ void IR_builder::CodeGen(ASTRoot* root) {
             auto it = dynamic_cast<ASTIfStmt*>(stmt);
 
             BasicBlock* True_Block = BasicBlock::Create(Context, pref + "true_block", Main);
-            IRBuilder<> True_Builder(True_Block);
-            Stmt_Gen(pref + "IF_True", it->true_block, True_Builder);
+            builder.SetInsertPoint(True_Block);
+            Stmt_Gen(pref + "IF_True", it->true_block);
 
             BasicBlock* False_Block = BasicBlock::Create(Context, pref + "false_block", Main);
-            IRBuilder<> False_Builder(False_Block);
-            Stmt_Gen(pref + "IF_False", it->false_block, False_Builder);
+            builder.SetInsertPoint(False_Block);
+            Stmt_Gen(pref + "IF_False", it->false_block);
 
             builder.CreateCondBr(get_exp_value(it->cond), True_Block, False_Block);
         }
@@ -238,7 +240,8 @@ void IR_builder::CodeGen(ASTRoot* root) {
         auto it = root->stmt;
         //程序主体部分
         while (it) {
-            Stmt_Gen(to_string(cnt += 1), it, builder);
+            cout << it->get_stmt_type() << endl;
+            //Stmt_Gen(to_string(cnt += 1), it);
             it = it->next_stmt;
         }
     }
