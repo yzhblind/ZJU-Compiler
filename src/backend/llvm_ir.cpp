@@ -9,6 +9,7 @@ IR_builder::IR_builder() {
 IR_builder::~IR_builder() {
 
 }
+int de_bug = 0;
 
 
 void IR_builder::CodeGen(ASTRoot* root) {
@@ -40,8 +41,10 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 format += "%lf";
                 printf_args.emplace_back(arg);
             }
+            format.push_back(' ');
             // TODO string and etc
         }
+        format.pop_back();
         if (new_line) {
             format += "\n";
         }
@@ -188,11 +191,9 @@ void IR_builder::CodeGen(ASTRoot* root) {
             };
 
             if (expr->right) {
-                //do sth
                 auto type = expr->aop;
                 using T = ASTSimpleExpr::AOP;
                 Value* ret;
-
                 if (type == T::ADD)
                     ret = builder.CreateAdd(get_term(expr->left), get_term(expr->right));
                 else if (type == T::SUB)
@@ -231,6 +232,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
     function<void(const string&, ASTStmt*)> Stmt_Gen = [&](const string& pref, ASTStmt* stmt) {
         auto type = stmt->get_stmt_type();
         using T = ASTStmt::TypeKind;
+
         if (type == T::EMPTY) return;
         else if (type == T::ASSIGN) {
             auto it = dynamic_cast<ASTAssignStmt*>(stmt);
@@ -243,9 +245,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
         }
         else if (type == T::IF) {
             auto it = dynamic_cast<ASTIfStmt*>(stmt);
-
-            auto cur = builder.GetInsertBlock();
-
+            
             BasicBlock* True_Block = BasicBlock::Create(Context, pref + "true_block", Main);
             BasicBlock* False_Block = BasicBlock::Create(Context, pref + "false_block", Main);
             BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Main);
@@ -262,14 +262,42 @@ void IR_builder::CodeGen(ASTRoot* root) {
             builder.SetInsertPoint(Cont_Block);
         }
         else if (type == T::REPEAT) {
+            auto it = dynamic_cast<ASTRepeatStmt*>(stmt);
+            
+            BasicBlock* Repeat_Body = BasicBlock::Create(Context, pref + "repeat_body", Main);
+            BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Main);
+            
+            builder.CreateBr(Repeat_Body);
+            builder.SetInsertPoint(Repeat_Body);
 
+            Stmt_Gen(pref + "repeat", it->loop_body);
+            
+            builder.CreateCondBr(get_exp_value(it->cond), Cont_Block, Repeat_Body);
+            builder.SetInsertPoint(Cont_Block);
         }
         else if (type == T::WHILE) {
+            auto it = dynamic_cast<ASTWhileStmt*>(stmt);
+            
+            BasicBlock* While_Body = BasicBlock::Create(Context, pref + "while_body", Main);
+            BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Main); //over
+            BasicBlock* Cond_Block = BasicBlock::Create(Context, pref + "cond_block", Main); //条件
 
+            builder.CreateBr(Cond_Block);//back
+            builder.SetInsertPoint(Cond_Block);
+            
+            builder.CreateCondBr(get_exp_value(it->cond), While_Body, Cont_Block);
+
+            builder.SetInsertPoint(While_Body);
+            Stmt_Gen(pref + "while", it->loop_body);
+            builder.CreateBr(Cond_Block);
+            
+            builder.SetInsertPoint(Cont_Block);
         }
         else if (type == T::FOR) {
 
         }
+
+        if (stmt->next_stmt) Stmt_Gen(pref, stmt->next_stmt);
     };
 
     {
@@ -281,7 +309,6 @@ void IR_builder::CodeGen(ASTRoot* root) {
     }
     //type_def是干什么用的?
     //typedef/using in cpp?
-    //好像懂了
     {
         auto it = root->type_def;
         while (it) {
@@ -307,23 +334,23 @@ void IR_builder::CodeGen(ASTRoot* root) {
         //TODO
     }
 
-    int cnt = 0; //好像重名会自动加后缀 TODO
+    int cnt = 0; 
     {
         auto it = root->stmt;
-        //程序主体部分
-        while (it) {
-            Stmt_Gen("stmt" + to_string(cnt += 1), it);
-            it = it->next_stmt;
-        }
+        if (it) Stmt_Gen("stmt", it);
     }
-    //Cprint({ Value_map["OUT"] }, true);
+
+    function<Value* (string)> load_var = [&](string str) {
+        return builder.CreateLoad(Type::getInt64Ty(Context), Value_map[str]);
+    };
+
+    Cprint({ load_var("OUT") }, true);
     
-    builder.CreateRet(builder.CreateLoad(Type::getInt64Ty(Context), Value_map["OUT"]));
+    builder.CreateRet(load_var("OUT"));
     outs() << "We just constructed this LLVM module:\n\n" << *M;
     outs().flush();
-    
 
-    ExecutionEngine* EE = EngineBuilder(std::move(Owner)).create();
+    ExecutionEngine* EE = EngineBuilder(std::move(Owner)).create(); //JIT
 
     std::vector<GenericValue> noargs;
     GenericValue gv = EE->runFunction(Main, noargs);
