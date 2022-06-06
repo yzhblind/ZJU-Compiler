@@ -32,5 +32,11 @@ add_executable(mypc
     ${LLVM_SOURCE} ${AST_SOURCE} pascal.l.cpp
     pascal.y.cpp pascal.y.hpp main.cpp)
 
-llvm_map_components_to_libnames(llvm_libs support core irreader)    
+llvm_map_components_to_libnames(llvm_libs Core
+ExecutionEngine
+Interpreter
+MC
+MCJIT
+Support
+nativecodegen)    
 target_link_libraries(mypc ${llvm_libs})

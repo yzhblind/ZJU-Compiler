@@ -1,6 +1,8 @@
 #include "llvm_ir.hpp"
 
 IR_builder::IR_builder() {
+    InitializeNativeTarget();
+    LLVMInitializeNativeAsmPrinter();
     Owner = make_unique<Module>("test", Context);
     M = Owner.get();
 }
@@ -8,21 +10,80 @@ IR_builder::~IR_builder() {
 
 }
 
+
 void IR_builder::CodeGen(ASTRoot* root) {
-    //cout << "!" << endl;
-    Function* Main = Function::Create(FunctionType::get(Type::getInt64Ty(Context), { Type::getInt64Ty(Context) }, false), Function::ExternalLinkage, "Main", M);
+    Function* Main = Function::Create(FunctionType::get(Type::getInt64Ty(Context), {}, false), Function::ExternalLinkage, "main", M);
     BasicBlock* MainB = BasicBlock::Create(Context, "Global", Main);
     IRBuilder<> builder(MainB);
-    //因为只有两层，就不dfs了
-    //首先考虑全局常量
+
+    auto Cprint = [&](vector<Value*>args, bool new_line) {
+        static Function* llvm_printf = nullptr;
+        if (llvm_printf == nullptr) {
+            //build printf
+            vector<Type*> arg_types = { Type::getInt8PtrTy(Context) };
+            FunctionType* func_type = FunctionType::get(Type::getInt32Ty(Context), arg_types, true);
+            Function* func = Function::Create(func_type, Function::ExternalLinkage, "printf", M);
+            func->setCallingConv(CallingConv::C);
+            llvm_printf = func;
+        }
+        string format;
+        vector<Value*> printf_args;
+        printf_args.emplace_back(nullptr);
+        for (auto arg : args) {
+            auto type = arg->getType()->getTypeID();
+            using T = Type::TypeID;
+            if (type == T::IntegerTyID) {
+                format += "%d";
+                printf_args.emplace_back(arg);
+            }
+            else if (type == T::DoubleTyID) {
+                format += "%lf";
+                printf_args.emplace_back(arg);
+            }
+            // TODO string and etc
+        }
+        if (new_line) {
+            format += "\n";
+        }
+        printf_args[0] = builder.CreateGlobalStringPtr(format, "printf_format");
+        return builder.CreateCall(llvm_printf, printf_args, "call_printf");
+    };
 
     map<string, Value*> Value_map;
+
+    Value* con_0 = builder.getInt64(0);
+
+    function<Value* (ASTConstValue*)> build_constant_value = [&](ASTConstValue* val) {
+        auto type = val->value_type;
+        using T = ASTConstValue::ConstType;
+        if (type == T::INT) {
+            Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
+            builder.CreateStore(builder.getInt64(val->int_value), ret);
+            return ret;
+        }
+        else if (type == T::REAL) {
+            // 好像没找到
+            //return builder.getDouble(val->real_value);
+        }
+        else if (type == T::STRING) {
+            //return builder.getString();
+            //还没找到
+        }
+        else if (type == T::ID) {
+            //????
+        }
+        else {
+            //????
+            assert(type == T::NIL);
+        }
+    };
 
     function<Value* (ASTConstValue*)> get_constant_value = [&](ASTConstValue* val) {
         auto type = val->value_type;
         using T = ASTConstValue::ConstType;
         if (type == T::INT) {
-            return builder.getInt64(val->int_value);
+            Value* ret = builder.getInt64(val->int_value);
+            return ret;
         }
         else if (type == T::REAL) {
             // 好像没找到
@@ -45,7 +106,9 @@ void IR_builder::CodeGen(ASTRoot* root) {
         auto type = var->get_type();
         using T = ASTVarAccess::TypeKind;
         if (type == T::ID) {
-            return Value_map[dynamic_cast<ASTVarAccessId*>(var)->id];
+            auto V = Value_map[dynamic_cast<ASTVarAccessId*>(var)->id];
+
+            return V;
         }
         else if (type == T::INDEX) {
 
@@ -66,10 +129,12 @@ void IR_builder::CodeGen(ASTRoot* root) {
             auto ret = dynamic_cast<ASTTypeId*>(val);
             if (ret->id == "integer") {
                 Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
+                builder.CreateStore(con_0, ret);
                 return ret;
             }
             else if (ret->id == "real") {
                 Value* ret = builder.CreateAlloca(Type::getDoubleTy(Context));
+                //TODO store一个0
                 return ret;
             }
         } //...
@@ -93,7 +158,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
                         return get_constant_value(dynamic_cast<ASTFactorConst*>(expr)->value);
                     }
                     else if (type == T::EXPR) {
-
+                        return get_exp_value(dynamic_cast<ASTFactorExpr*>(expr)->expr);
                     }
                     else if (type == T::FUNC_CALL) {
 
@@ -117,6 +182,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
                         ret = builder.CreateMul(get_factor(expr->left), get_factor(expr->right));
                     else if (type == T::FLT_DIV)
                         ret = builder.CreateFDiv(get_factor(expr->left), get_factor(expr->right));
+                    return ret;
                 }
                 return get_factor(expr->left);
             };
@@ -140,11 +206,10 @@ void IR_builder::CodeGen(ASTRoot* root) {
         };
 
         if (expr->right) {
-            //do sth
             auto type = expr->rop;
             using T = ASTExpr::ROP;
             Value* ret;
-            //这里还没有区分整数和浮点数
+            //这里还没有区分整数和浮点数 TODO
 
             if (type == T::EQ)
                 ret = builder.CreateICmpEQ(get_simple(expr->left), get_simple(expr->right));
@@ -166,17 +231,13 @@ void IR_builder::CodeGen(ASTRoot* root) {
 
     function<void(const string&, ASTStmt*)> Stmt_Gen = [&](const string& pref, ASTStmt* stmt) {
         auto type = stmt->get_stmt_type();
-        cout << type << endl;
         using T = ASTStmt::TypeKind;
-        if (type == T::EMPTY) {
-            //do nothing
-            return;
-        }
+        if (type == T::EMPTY) return;
         else if (type == T::ASSIGN) {
             auto it = dynamic_cast<ASTAssignStmt*>(stmt);
             Value* right = get_exp_value(it->right);
             Value* left = var_access(it->left);
-            builder.CreateStore(left, right);
+            builder.CreateStore(right, left);
         }
         else if (type == T::PROCEDURE_CALL) {
 
@@ -194,12 +255,21 @@ void IR_builder::CodeGen(ASTRoot* root) {
 
             builder.CreateCondBr(get_exp_value(it->cond), True_Block, False_Block);
         }
+        else if (type == T::REPEAT) {
+
+        }
+        else if (type == T::WHILE) {
+
+        }
+        else if (type == T::FOR) {
+
+        }
     };
 
     {
         auto it = root->const_def;
         while (it) {
-            Value_map[it->id] = get_constant_value(it->value);
+            Value_map[it->id] = build_constant_value(it->value);
             it = it->next_const_def;
         }
     }
@@ -227,24 +297,33 @@ void IR_builder::CodeGen(ASTRoot* root) {
 
     {
         auto it = root->proc_func_decl;
-        //这里构建函数 好像应该把上面的部分封装起来，返回一个Function*
-
-        //dosth
+        //这里构建函数 应该把上面的部分封装起来，返回一个Function*
+        //TODO
     }
 
-    int cnt = 0;
-
-    //BasicBlock* Fun = BasicBlock::Create(Context, "Fun", Main);
-
+    int cnt = 0; //好像重名会自动加后缀 TODO
     {
         auto it = root->stmt;
         //程序主体部分
         while (it) {
-            cout << it->get_stmt_type() << endl;
-            //Stmt_Gen(to_string(cnt += 1), it);
+            Stmt_Gen("stmt" + to_string(cnt += 1), it);
             it = it->next_stmt;
         }
     }
+    //Cprint({ Value_map["OUT"] }, true);
+    
+    builder.CreateRet(builder.CreateLoad(Type::getInt64Ty(Context), Value_map["OUT"]));
     outs() << "We just constructed this LLVM module:\n\n" << *M;
     outs().flush();
+    
+
+    ExecutionEngine* EE = EngineBuilder(std::move(Owner)).create();
+
+    std::vector<GenericValue> noargs;
+    GenericValue gv = EE->runFunction(Main, noargs);
+
+    // Import result of execution:
+    outs() << "Result: " << gv.IntVal << "\n";
+    delete EE;
+    llvm_shutdown();
 }
