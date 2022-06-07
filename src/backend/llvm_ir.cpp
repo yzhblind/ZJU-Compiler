@@ -10,6 +10,13 @@ IR_builder::~IR_builder() {
 
 }
 
+
+string to_low(const string& x) {
+    string tmp = x;
+    transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
+    return tmp;
+}
+
 void IR_builder::CodeGen(ASTRoot* root) {
     Function* Main = Function::Create(FunctionType::get(Type::getInt64Ty(Context), {}, false), Function::ExternalLinkage, "main", M);
     BasicBlock* MainB = BasicBlock::Create(Context, "Entry", Main);
@@ -134,16 +141,21 @@ void IR_builder::CodeGen(ASTRoot* root) {
         Value* ret;
         if (type == T::ID) {
             auto ret = dynamic_cast<ASTTypeId*>(val);
-            if (ret->id == "integer") {
+            if (to_low(ret->id) == "integer") {
                 Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
                 builder.CreateStore(con_0, ret);
                 return ret;
             }
+            else {
+                cout << ret->id << endl;
+                assert(0);
+            }
+            /*
             else if (ret->id == "real") {
                 Value* ret = builder.CreateAlloca(Type::getDoubleTy(Context));
                 //TODO store一个0
                 return ret;
-            }
+            }*/
         } //...
     };
 
@@ -168,7 +180,16 @@ void IR_builder::CodeGen(ASTRoot* root) {
                         return get_exp_value(dynamic_cast<ASTFactorExpr*>(expr)->expr);
                     }
                     else if (type == T::FUNC_CALL) {
-
+                        auto ret = dynamic_cast<ASTFactorFunc*>(expr);
+                        auto it = ret->para;
+                        vector<Value*> args;
+                        while (it) {
+                            args.emplace_back(get_exp_value(it->expr));
+                            it = it->next_actual_para;
+                        }
+                        //TODO 假设参数全是表达式了
+                        Value* tmp = builder.CreateCall(Func_map[ret->id], args);
+                        return tmp;
                     }
                     else {
                         assert(type == T::AT);
@@ -233,7 +254,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
         return get_simple(expr->left);
     };
 
-    function<void(const string&, ASTStmt*)> Stmt_Gen = [&](const string& pref, ASTStmt* stmt) {
+    function<void(const string&, ASTStmt*, Function*)> Stmt_Gen = [&](const string& pref, ASTStmt* stmt, Function* Fun) {
         auto type = stmt->get_stmt_type();
         using T = ASTStmt::TypeKind;
 
@@ -241,7 +262,12 @@ void IR_builder::CodeGen(ASTRoot* root) {
         else if (type == T::ASSIGN) {
             auto it = dynamic_cast<ASTAssignStmt*>(stmt);
             Value* right = get_exp_value(it->right);
-            Value* left = var_access(it->left);
+            Value* left;
+            if (it->left == nullptr)
+                left = local->find("RESULT")->second;
+            else 
+                left = var_access(it->left);
+            
             builder.CreateStore(right, left);
         }
         else if (type == T::PROCEDURE_CALL) {
@@ -250,17 +276,17 @@ void IR_builder::CodeGen(ASTRoot* root) {
         else if (type == T::IF) {
             auto it = dynamic_cast<ASTIfStmt*>(stmt);
             
-            BasicBlock* True_Block = BasicBlock::Create(Context, pref + "true_block", Main);
-            BasicBlock* False_Block = BasicBlock::Create(Context, pref + "false_block", Main);
-            BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Main);
+            BasicBlock* True_Block = BasicBlock::Create(Context, pref + "true_block", Fun);
+            BasicBlock* False_Block = BasicBlock::Create(Context, pref + "false_block", Fun);
+            BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Fun);
             builder.CreateCondBr(get_exp_value(it->cond), True_Block, False_Block);
             
             builder.SetInsertPoint(True_Block);
-            Stmt_Gen(pref + "IF_True", it->true_block);
+            Stmt_Gen(pref + "IF_True", it->true_block, Fun);
             builder.CreateBr(Cont_Block);//back
 
             builder.SetInsertPoint(False_Block);
-            Stmt_Gen(pref + "IF_False", it->false_block);
+            Stmt_Gen(pref + "IF_False", it->false_block, Fun);
             builder.CreateBr(Cont_Block);//back
 
             builder.SetInsertPoint(Cont_Block);
@@ -268,13 +294,13 @@ void IR_builder::CodeGen(ASTRoot* root) {
         else if (type == T::REPEAT) {
             auto it = dynamic_cast<ASTRepeatStmt*>(stmt);
             
-            BasicBlock* Repeat_Body = BasicBlock::Create(Context, pref + "repeat_body", Main);
-            BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Main);
+            BasicBlock* Repeat_Body = BasicBlock::Create(Context, pref + "repeat_body", Fun);
+            BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Fun);
             
             builder.CreateBr(Repeat_Body);
             builder.SetInsertPoint(Repeat_Body);
 
-            Stmt_Gen(pref + "repeat", it->loop_body);
+            Stmt_Gen(pref + "repeat", it->loop_body, Fun);
             
             builder.CreateCondBr(get_exp_value(it->cond), Cont_Block, Repeat_Body);
             builder.SetInsertPoint(Cont_Block);
@@ -282,9 +308,9 @@ void IR_builder::CodeGen(ASTRoot* root) {
         else if (type == T::WHILE) {
             auto it = dynamic_cast<ASTWhileStmt*>(stmt);
             
-            BasicBlock* While_Body = BasicBlock::Create(Context, pref + "while_body", Main);
-            BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Main); //over
-            BasicBlock* Cond_Block = BasicBlock::Create(Context, pref + "cond_block", Main); //条件
+            BasicBlock* While_Body = BasicBlock::Create(Context, pref + "while_body", Fun);
+            BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Fun); //over
+            BasicBlock* Cond_Block = BasicBlock::Create(Context, pref + "cond_block", Fun); //条件
 
             builder.CreateBr(Cond_Block);//back
             builder.SetInsertPoint(Cond_Block);
@@ -292,7 +318,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
             builder.CreateCondBr(get_exp_value(it->cond), While_Body, Cont_Block);
 
             builder.SetInsertPoint(While_Body);
-            Stmt_Gen(pref + "while", it->loop_body);
+            Stmt_Gen(pref + "while", it->loop_body, Fun);
             builder.CreateBr(Cond_Block);
             
             builder.SetInsertPoint(Cont_Block);
@@ -302,30 +328,38 @@ void IR_builder::CodeGen(ASTRoot* root) {
         }
 
         if (stmt->next_stmt)
-            Stmt_Gen(pref, stmt->next_stmt);
+            Stmt_Gen(pref, stmt->next_stmt, Fun);
     };
 
-    function<vector<Type*>(map<string, Value*>&, ASTVarDecl*)> build_map = [&](map<string, Value*> &Value_map, ASTVarDecl* var_decl) {
+    function<vector<Type*>(map<string, Value*>&, ASTVarDecl*)> get_types = [&](map<string, Value*> &Value_map, ASTVarDecl* var_decl) {
         vector<Type*> ret;
         while (var_decl) {
             for (string str : var_decl->id_list) {
-                cout << "BUILD:" << str << endl;
-                Value_map[str] = build_var(var_decl->var_type);
                 ret.emplace_back(Type::getInt64Ty(Context));
             }
             var_decl = var_decl->next_var_decl;
         }
         return ret;
     };
-    function<void(map<string, Value*>&, ASTConstDef*)> build_const = [&](map<string, Value*> &Value_map, ASTConstDef* const_def) {
+
+    function<void(map<string, Value*>&, ASTVarDecl*)> build_map = [&](map<string, Value*> &Value_map, ASTVarDecl* var_decl) {
+        while (var_decl) {
+            for (string str : var_decl->id_list) {
+                cout << "BUILD:" << str << endl;
+                Value_map[str] = build_var(var_decl->var_type);
+            }
+            var_decl = var_decl->next_var_decl;
+        }
+    };
+    
+    function<void(map<string, Value*>&, ASTConstDef*)> build_const = [&](map<string, Value*>& Value_map, ASTConstDef* const_def) {
         while (const_def) {
             Value_map[const_def->id] = build_constant_value(const_def->value);
             const_def = const_def->next_const_def;
         }
     };
 
-    function<Function* (ASTProcFuncDecl*)> Build_Func = [&](ASTProcFuncDecl* decl) {
-
+    function<void(ASTProcFuncDecl*)> Build_Func = [&](ASTProcFuncDecl* decl) {
         cout << "BEGIN FUNC" << endl;
 
         Function* Fun;
@@ -340,12 +374,11 @@ void IR_builder::CodeGen(ASTRoot* root) {
             
             map<string, Value*> Value_map_local;
             vector<Type*> func_type;
+            auto o_para = para;
             while (para) {
                 using T = ASTParameter::TypeKind;
-                //cout << "table:" << para->get_type() << endl;
                 if (para->get_type() == T::VARIABLE) {
-                    auto tmp = build_map(Value_map_local, para->var_decl);
-                    ASTVarDecl* var_decl = para->var_decl;
+                    auto tmp = get_types(Value_map_local, para->var_decl);
                     for (auto p : tmp) func_type.emplace_back(p);//先假设全是不传引用的int了
                 }
                 else if (para->get_type() == T::REF_VARIABLE) {
@@ -356,26 +389,60 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 }
                 para = para->next_para;
             }
-            string tmp = func_decl->ret_type_id;
-            transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower); 
-            assert(tmp == "integer");
+            assert(to_low(func_decl->ret_type_id) == "integer");
             
             Fun = Function::Create(FunctionType::get(Type::getInt64Ty(Context), func_type, false), Function::ExternalLinkage, decl->id, M);
-            BasicBlock* MainB = BasicBlock::Create(Context, decl->id + "Entry", Main);
+            cout << "map!" << decl->id << endl;
+            Func_map[decl->id] = Fun;
+            BasicBlock* MainB = BasicBlock::Create(Context, decl->id + "Entry", Fun);
             builder.SetInsertPoint(MainB);
-
+        
             local = &Value_map_local;
+            para = o_para;
+
+            int cnt = 0;
+            Function::arg_iterator args_it = Fun->arg_begin();
+            
+            while (para) {
+                using T = ASTParameter::TypeKind;
+                if (para->get_type() == T::VARIABLE) {
+                    while (para->var_decl) {
+                        for (string str : para->var_decl->id_list) {
+                            Value* ret = args_it++;
+                            Value* pointer = builder.CreateAlloca(Type::getInt64Ty(Context));         
+                            builder.CreateStore(ret, pointer);
+                            Value_map_local[str] = pointer;
+                        }
+                        para->var_decl = para->var_decl->next_var_decl;
+                    }
+                }
+                else if (para->get_type() == T::REF_VARIABLE) {
+                    //TODO
+                }
+                else {
+                    //TODO
+                }
+                para = para->next_para;
+            }
 
             auto root = decl->block;
             build_const(Value_map_local, root->const_def);
             //type_def TODO
             build_map(Value_map_local, root->var_decl);
             
+            Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
+            builder.CreateStore(con_0, ret);
+            Value_map_local["RESULT"] = ret;
+
             ASTStmt* stmt = root->stmt;
-            if (stmt) Stmt_Gen(decl->id + "_stmt", stmt);
+            if (stmt) Stmt_Gen(decl->id + "_stmt", stmt, Fun);
+
+            function<Value* (string)> load_var = [&](string str) {
+                return builder.CreateLoad(Type::getInt64Ty(Context), Value_map_local[str]);
+            };
+            builder.CreateRet(load_var("RESULT"));
         }
         local = &Value_map;
-        return Fun;
     };
     
     function<void()> Main_builder = [&]() {
@@ -385,14 +452,14 @@ void IR_builder::CodeGen(ASTRoot* root) {
 
         ASTProcFuncDecl* func = root->proc_func_decl;
         while (func) {
-            Func_map[func->id] = Build_Func(func);
+            Build_Func(func);
             func = func->next_proc_func_decl;
         }
         
         builder.SetInsertPoint(MainB);
 
         ASTStmt* stmt = root->stmt;
-        if (stmt) Stmt_Gen("main_stmt", stmt);
+        if (stmt) Stmt_Gen("main_stmt", stmt, Main);
     
         function<Value* (string)> load_var = [&](string str) {
             return builder.CreateLoad(Type::getInt64Ty(Context), Value_map[str]);
