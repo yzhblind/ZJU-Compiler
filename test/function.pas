@@ -1,6 +1,12 @@
 PROGRAM Add(input, output);
     VAR
-        C, OUT: integer;
+        C: integer;
+
+    Function Gcd(A: Integer; B: Integer) : Integer;
+        BEGIN
+            If B = 0 then RESULT := A
+            else RESULT := Gcd(B, A mod B);
+        END;
 
     Function Fac(A: Integer) : Integer;
         BEGIN
@@ -21,6 +27,5 @@ PROGRAM Add(input, output);
         END;
 
     BEGIN
-        C := Pow(2, 10);
-        OUT := C;
+        write(10, 20);
     END.

@@ -271,7 +271,24 @@ void IR_builder::CodeGen(ASTRoot* root) {
             builder.CreateStore(right, left);
         }
         else if (type == T::PROCEDURE_CALL) {
-
+            auto it = dynamic_cast<ASTProcStmt*>(stmt);
+            auto type = it->get_proc_type();
+            using T = ASTProcStmt::TypeKind;
+            if (type == T::NORMAL) {
+                assert(0);
+            }
+            else if (type == T::WRITE) {
+                auto w_stmt = dynamic_cast<ASTWriteStmt*>(stmt);
+                auto args = w_stmt->para->write_para;
+                vector<Value*> arg;
+                for (auto x : args) 
+                    arg.emplace_back(get_exp_value(x->value));
+                
+                Cprint(arg, w_stmt->newline);
+            }
+            else {
+                
+            }
         }
         else if (type == T::IF) {
             auto it = dynamic_cast<ASTIfStmt*>(stmt);
@@ -465,8 +482,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
             return builder.CreateLoad(Type::getInt64Ty(Context), Value_map[str]);
         };
 
-        Cprint({ load_var("OUT") }, true);
-        builder.CreateRet(load_var("OUT"));
+        builder.CreateRet(builder.getInt64(0));
     };
     
     Main_builder();
@@ -480,7 +496,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
     GenericValue gv = EE->runFunction(Main, noargs);
 
     // Import result of execution:
-    outs() << "Result: " << gv.IntVal << "\n";
+    outs() << "Return value: " << gv.IntVal << "\n";
     delete EE;
     llvm_shutdown();
 }
