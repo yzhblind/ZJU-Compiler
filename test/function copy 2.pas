@@ -2,12 +2,6 @@ PROGRAM Add(input, output);
     VAR
         C, OUT: integer;
 
-    Function Fac(A: Integer) : Integer;
-        BEGIN
-            If A = 0 then RESULT := 1
-            else RESULT := A * Fac(A - 1);
-        END;
-
     Function Pow(B: Integer; A: Integer) : Integer;
         VAR
             ANS: integer;
