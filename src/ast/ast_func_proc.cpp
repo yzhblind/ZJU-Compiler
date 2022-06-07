@@ -4,13 +4,13 @@ ASTParameter::ASTParameter(ASTVarDecl *var_decl, bool is_ref)
 {
     if (is_ref)
     {
-        this->var_decl;
+        this->var_decl = var_decl;
         proc_func = nullptr;
         type = REF_VARIABLE;
     }
     else
     {
-        this->var_decl;
+        this->var_decl = var_decl;
         proc_func = nullptr;
         type = VARIABLE;
     }
