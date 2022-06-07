@@ -9,12 +9,10 @@ IR_builder::IR_builder() {
 IR_builder::~IR_builder() {
 
 }
-int de_bug = 0;
-
 
 void IR_builder::CodeGen(ASTRoot* root) {
     Function* Main = Function::Create(FunctionType::get(Type::getInt64Ty(Context), {}, false), Function::ExternalLinkage, "main", M);
-    BasicBlock* MainB = BasicBlock::Create(Context, "Global", Main);
+    BasicBlock* MainB = BasicBlock::Create(Context, "Entry", Main);
     IRBuilder<> builder(MainB);
 
     auto Cprint = [&](vector<Value*>args, bool new_line) {
@@ -52,7 +50,10 @@ void IR_builder::CodeGen(ASTRoot* root) {
         return builder.CreateCall(llvm_printf, printf_args, "call_printf");
     };
 
-    map<string, Value*> Value_map;
+    map<string, Value*> Value_map; //Global map
+    map<string, Function*> Func_map;
+
+    map<string, Value*>* local = &Value_map;
 
     Value* con_0 = builder.getInt64(0);
 
@@ -109,9 +110,12 @@ void IR_builder::CodeGen(ASTRoot* root) {
         auto type = var->get_type();
         using T = ASTVarAccess::TypeKind;
         if (type == T::ID) {
-            auto V = Value_map[dynamic_cast<ASTVarAccessId*>(var)->id];
-
-            return V;
+            auto idx = dynamic_cast<ASTVarAccessId*>(var)->id;
+            auto it = local->find(idx);
+            if (it != local->end()) {
+                return it->second;
+            }
+            return Value_map.find(idx)->second;
         }
         else if (type == T::INDEX) {
 
@@ -124,7 +128,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
         }
     };
 
-    function<Value* (ASTType*)>build_var = [&](ASTType* val) {
+    function<Value* (ASTType*)> build_var = [&](ASTType* val) {
         auto type = val->get_type();
         using T = ASTType::TypeKind;
         Value* ret;
@@ -297,56 +301,109 @@ void IR_builder::CodeGen(ASTRoot* root) {
 
         }
 
-        if (stmt->next_stmt) Stmt_Gen(pref, stmt->next_stmt);
+        if (stmt->next_stmt)
+            Stmt_Gen(pref, stmt->next_stmt);
     };
 
-    {
-        auto it = root->const_def;
-        while (it) {
-            Value_map[it->id] = build_constant_value(it->value);
-            it = it->next_const_def;
-        }
-    }
-    //type_def是干什么用的?
-    //typedef/using in cpp?
-    {
-        auto it = root->type_def;
-        while (it) {
-            //do sth
-            it = it->next_type_def;
-        }
-    }
-
-    {
-        auto it = root->var_decl;
-        while (it) {
-            //do sth
-            for (string str : it->id_list) {
-                Value_map[str] = build_var(it->var_type);
+    function<vector<Type*>(map<string, Value*>&, ASTVarDecl*)> build_map = [&](map<string, Value*> &Value_map, ASTVarDecl* var_decl) {
+        vector<Type*> ret;
+        while (var_decl) {
+            for (string str : var_decl->id_list) {
+                cout << "BUILD:" << str << endl;
+                Value_map[str] = build_var(var_decl->var_type);
+                ret.emplace_back(Type::getInt64Ty(Context));
             }
-            it = it->next_var_decl;
+            var_decl = var_decl->next_var_decl;
         }
-    }
-
-    {
-        auto it = root->proc_func_decl;
-        //这里构建函数 应该把上面的部分封装起来，返回一个Function*
-        //TODO
-    }
-
-    int cnt = 0; 
-    {
-        auto it = root->stmt;
-        if (it) Stmt_Gen("stmt", it);
-    }
-
-    function<Value* (string)> load_var = [&](string str) {
-        return builder.CreateLoad(Type::getInt64Ty(Context), Value_map[str]);
+        return ret;
+    };
+    function<void(map<string, Value*>&, ASTConstDef*)> build_const = [&](map<string, Value*> &Value_map, ASTConstDef* const_def) {
+        while (const_def) {
+            Value_map[const_def->id] = build_constant_value(const_def->value);
+            const_def = const_def->next_const_def;
+        }
     };
 
-    Cprint({ load_var("OUT") }, true);
+    function<Function* (ASTProcFuncDecl*)> Build_Func = [&](ASTProcFuncDecl* decl) {
+
+        cout << "BEGIN FUNC" << endl;
+
+        Function* Fun;
+        auto type = decl->get_type();
+        if (type == ASTProcFuncDecl::TypeKind::PROCEDURE) {
+            
+        }
+        else {
+            ASTFuncDecl* func_decl = dynamic_cast<ASTFuncDecl*>(decl);
+            //先获取参数类型
+            auto para = func_decl->para;
+            
+            map<string, Value*> Value_map_local;
+            vector<Type*> func_type;
+            while (para) {
+                using T = ASTParameter::TypeKind;
+                //cout << "table:" << para->get_type() << endl;
+                if (para->get_type() == T::VARIABLE) {
+                    auto tmp = build_map(Value_map_local, para->var_decl);
+                    ASTVarDecl* var_decl = para->var_decl;
+                    for (auto p : tmp) func_type.emplace_back(p);//先假设全是不传引用的int了
+                }
+                else if (para->get_type() == T::REF_VARIABLE) {
+                    //TODO
+                }
+                else {
+                    //TODO
+                }
+                para = para->next_para;
+            }
+            string tmp = func_decl->ret_type_id;
+            transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower); 
+            assert(tmp == "integer");
+            
+            Fun = Function::Create(FunctionType::get(Type::getInt64Ty(Context), func_type, false), Function::ExternalLinkage, decl->id, M);
+            BasicBlock* MainB = BasicBlock::Create(Context, decl->id + "Entry", Main);
+            builder.SetInsertPoint(MainB);
+
+            local = &Value_map_local;
+
+            auto root = decl->block;
+            build_const(Value_map_local, root->const_def);
+            //type_def TODO
+            build_map(Value_map_local, root->var_decl);
+            
+            ASTStmt* stmt = root->stmt;
+            if (stmt) Stmt_Gen(decl->id + "_stmt", stmt);
+        }
+        local = &Value_map;
+        return Fun;
+    };
     
-    builder.CreateRet(load_var("OUT"));
+    function<void()> Main_builder = [&]() {
+        build_const(Value_map, root->const_def);
+        //type_def TODO
+        build_map(Value_map, root->var_decl);
+
+        ASTProcFuncDecl* func = root->proc_func_decl;
+        while (func) {
+            Func_map[func->id] = Build_Func(func);
+            func = func->next_proc_func_decl;
+        }
+        
+        builder.SetInsertPoint(MainB);
+
+        ASTStmt* stmt = root->stmt;
+        if (stmt) Stmt_Gen("main_stmt", stmt);
+    
+        function<Value* (string)> load_var = [&](string str) {
+            return builder.CreateLoad(Type::getInt64Ty(Context), Value_map[str]);
+        };
+
+        Cprint({ load_var("OUT") }, true);
+        builder.CreateRet(load_var("OUT"));
+    };
+    
+    Main_builder();
+
     outs() << "We just constructed this LLVM module:\n\n" << *M;
     outs().flush();
 
@@ -360,3 +417,14 @@ void IR_builder::CodeGen(ASTRoot* root) {
     delete EE;
     llvm_shutdown();
 }
+/*
+复杂度
+    构造某个定复杂度的算法 
+    规约
+DP
+
+后缀树
+    广义
+
+matching
+*/
