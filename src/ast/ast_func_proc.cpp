@@ -89,7 +89,7 @@ ASTProcFuncDecl::~ASTProcFuncDecl()
 
 ASTProcFuncDecl *ASTProcFuncDecl::append(ASTProcFuncDecl *next)
 {
-    ASTProcFuncDecl *it;
+    ASTProcFuncDecl *it = this;
     while (it->next_proc_func_decl != nullptr)
         it = it->next_proc_func_decl;
     it->next_proc_func_decl = next;
