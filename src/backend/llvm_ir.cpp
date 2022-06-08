@@ -26,6 +26,7 @@ struct myValue {
         5: array
     */
     int type;
+    GlobalVariable* g_value;
 };
 
 void IR_builder::CodeGen(ASTRoot* root) {
@@ -69,6 +70,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
         printf_args[0] = builder.CreateGlobalStringPtr(format, "printf_format");
         return builder.CreateCall(llvm_printf, printf_args, "call_printf");
     };
+    int global_find = 0;
 
     map<string, myValue> Value_map; //Global map
     map<string, int64_t> Const_map; //only for int，或许只需要用在函数定义上
@@ -80,6 +82,8 @@ void IR_builder::CodeGen(ASTRoot* root) {
     
 
     map<string, myValue>* local = &Value_map;
+    map<string, myValue>* global_pointer = &Value_map;
+    
 
     Value* con_0 = builder.getInt64(0);
     Value* fp_0 = ConstantFP::get(Type::getDoubleTy(Context), 0);
@@ -99,19 +103,27 @@ void IR_builder::CodeGen(ASTRoot* root) {
         return 0;
     };
 
+    int flag_global = 0;
+
     function<myValue (ASTConstValue*, string)> build_constant_value = [&](ASTConstValue* val, string name) {
         auto type = val->value_type;
         using T = ASTConstValue::ConstType;
         if (type == T::INT) {
-            Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
-            builder.CreateStore(builder.getInt64(val->int_value), ret);
+            if (!flag_global) {  
+                Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
+                builder.CreateStore(builder.getInt64(val->int_value), ret);
+                return (myValue){ ret, 0 };
+            }
+            M->getOrInsertGlobal(name, builder.getInt64Ty());
+            GlobalVariable* gVar = M->getNamedGlobal(name);
+            gVar->setInitializer(ConstantInt::get(builder.getInt64Ty(), APInt(64, val->int_value)));
             Const_map[name] = val->int_value;
-            return (myValue){ ret, 0 };
+            return (myValue){ con_0, 0, gVar };
         }
         else if (type == T::REAL) {
             Value* ret = builder.CreateAlloca(Type::getDoubleTy(Context));
             builder.CreateStore(ConstantFP::get(Type::getDoubleTy(Context), val->real_value), ret);
-            return (myValue){ ret, 1 };
+            return (myValue){ ret, 1 }; //REAL还不是真正的全局变量
         }
         else if (type == T::STRING) {
             //return builder.getString();
@@ -158,10 +170,13 @@ void IR_builder::CodeGen(ASTRoot* root) {
         using T = ASTVarAccess::TypeKind;
         if (type == T::ID) {
             auto idx = dynamic_cast<ASTVarAccessId*>(var)->id;
+            
             auto it = local->find(idx);
             if (it != local->end()) {
+                if (local == global_pointer) global_find = 1;
                 return (it->second);
             }
+            global_find = 1;
             return (Value_map.find(idx)->second);
         }
         else if (type == T::INDEX) {
@@ -176,8 +191,9 @@ void IR_builder::CodeGen(ASTRoot* root) {
             if (it != local->end()) {
                 arr = (it->second).value;
             }
-            arr = (Value_map.find(name)->second).value;
-            return (myValue){ builder.CreateGEP(arr, {con_0, idx}), O.type };
+            arr = (Value_map.find(name)->second).g_value;
+            flag_global = 0;
+            return (myValue) { builder.CreateGEP(arr, { con_0, idx }), O.type };
         }
         else if (type == T::FIELD) {
 
@@ -187,21 +203,27 @@ void IR_builder::CodeGen(ASTRoot* root) {
         }
     };
 
-    function<myValue (ASTType*)> build_var = [&](ASTType* val) {
+    function<myValue (ASTType*, string)> build_var = [&](ASTType* val, string name) {
         auto type = val->get_type();
         using T = ASTType::TypeKind;
         Value* ret;
         if (type == T::ID) {
             auto ret = dynamic_cast<ASTTypeId*>(val);
             if (to_low(ret->id) == "integer") {
-                Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
-                builder.CreateStore(con_0, ret);
-                return (myValue){ ret, 0 };
+                if (!flag_global) {  
+                    Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
+                    builder.CreateStore(con_0, ret);
+                    return (myValue){ ret, 0 };
+                }
+                M->getOrInsertGlobal(name, builder.getInt64Ty());
+                GlobalVariable* gVar = M->getNamedGlobal(name);
+                gVar->setInitializer(ConstantInt::get(builder.getInt64Ty(), APInt(64, 0)));
+                return (myValue) { con_0, 0, gVar };
             }
             else if (to_low(ret->id) == "real") {
                 Value* ret = builder.CreateAlloca(Type::getDoubleTy(Context));
                 builder.CreateStore(fp_0, ret);
-                return (myValue){ ret, 1 };
+                return (myValue){ ret, 1 }; //real还不是真正的全局
             }
         }
         else if (type == T::ARRAY) {
@@ -212,9 +234,14 @@ void IR_builder::CodeGen(ASTRoot* root) {
             ASTTypeSubrange* O = tmp[0];
             int le = get_const(O->left);
             int ri = get_const(O->right);
-            
-            Value* vet = builder.CreateAlloca(ArrayType::get(Type::getInt64Ty(Context), ri - le + 1));
-            return (myValue){ vet, 5 };
+            if (!flag_global) {  
+                Value* vet = builder.CreateAlloca(ArrayType::get(Type::getInt64Ty(Context), ri - le + 1));
+                return (myValue){ vet, 5 };
+            }
+            M->getOrInsertGlobal(name, ArrayType::get(Type::getInt64Ty(Context), ri - le + 1));
+            GlobalVariable* gVar = M->getNamedGlobal(name);
+            gVar->setInitializer(ConstantInt::get(builder.getInt64Ty(), APInt(64, 0)));
+            return (myValue) { con_0, 5, gVar };
         }
         return (myValue) {};
     };
@@ -228,15 +255,21 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 function<myValue(ASTFactor*)> get_factor = [&](ASTFactor* expr) {
                     using T = ASTFactor::TypeKind;
                     auto type = expr->get_type();
-
                     if (type == T::VAR) {
+                        global_find = 0;
                         auto O = var_access(dynamic_cast<ASTFactorVar*>(expr)->var);
                         Value* ret;
-                        if (O.type == 0)
-                            ret = builder.CreateLoad(Type::getInt64Ty(Context), O.value);
-                        else if (O.type == 1) 
-                            ret = builder.CreateLoad(Type::getDoubleTy(Context), O.value);
-                        return (myValue){ ret, O.type };
+                        
+                        if (global_find) {
+                            ret = builder.CreateLoad(O.g_value);
+                        }
+                        else {
+                            if (O.type == 0)
+                                ret = builder.CreateLoad(Type::getInt64Ty(Context), O.value);
+                            else if (O.type == 1)
+                                ret = builder.CreateLoad(Type::getDoubleTy(Context), O.value);
+                        }
+                        return (myValue) { ret, O.type };
                     }
                     else if (type == T::CONST) {
                         return get_constant_value(dynamic_cast<ASTFactorConst*>(expr)->value);
@@ -385,9 +418,17 @@ void IR_builder::CodeGen(ASTRoot* root) {
             Value* left;
             if (it->left == nullptr)
                 left = (local->find("RESULT")->second).value;
-            else 
-                left = var_access(it->left).value;
-            
+            else {
+                global_find = 0;
+                auto tmp = var_access(it->left);
+                if (global_find) {
+                    left = tmp.g_value;
+                }
+                else {
+                    left = tmp.value;
+                }
+            }
+
             builder.CreateStore(right, left);
         }
         else if (type == T::PROCEDURE_CALL) {
@@ -412,21 +453,25 @@ void IR_builder::CodeGen(ASTRoot* root) {
         }
         else if (type == T::IF) {
             auto it = dynamic_cast<ASTIfStmt*>(stmt);
-            
+
             BasicBlock* True_Block = BasicBlock::Create(Context, pref + "true_block", Fun);
             BasicBlock* False_Block = BasicBlock::Create(Context, pref + "false_block", Fun);
             BasicBlock* Cont_Block = BasicBlock::Create(Context, pref + "cont_block", Fun);
             builder.CreateCondBr(get_exp_value(it->cond).value, True_Block, False_Block);
-            
+                
             builder.SetInsertPoint(True_Block);
             Stmt_Gen(pref + "IF_True", it->true_block, Fun);
             builder.CreateBr(Cont_Block);//back
 
             builder.SetInsertPoint(False_Block);
-            Stmt_Gen(pref + "IF_False", it->false_block, Fun);
+            if (it->false_block)
+                Stmt_Gen(pref + "IF_False", it->false_block, Fun);
             builder.CreateBr(Cont_Block);//back
 
             builder.SetInsertPoint(Cont_Block);
+
+
+
         }
         else if (type == T::REPEAT) {
             auto it = dynamic_cast<ASTRepeatStmt*>(stmt);
@@ -489,7 +534,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
     function<void(map<string, myValue>&, ASTVarDecl*)> build_map = [&](map<string, myValue> &Value_map, ASTVarDecl* var_decl) {
         while (var_decl) {
             for (string str : var_decl->id_list) {
-                Value_map[str] = build_var(var_decl->var_type);
+                Value_map[str] = build_var(var_decl->var_type, str);
             }
             var_decl = var_decl->next_var_decl;
         }
@@ -614,9 +659,11 @@ void IR_builder::CodeGen(ASTRoot* root) {
     };
     
     function<void()> Main_builder = [&]() {
+        flag_global = 1;
         build_const(Value_map, root->const_def);
         //type_def TODO
         build_map(Value_map, root->var_decl);
+        flag_global = 0;
 
         ASTProcFuncDecl* func = root->proc_func_decl;
         while (func) {
@@ -626,6 +673,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
         
         builder.SetInsertPoint(MainB);
 
+        
         ASTStmt* stmt = root->stmt;
         if (stmt) Stmt_Gen("main_stmt", stmt, Main);
     
