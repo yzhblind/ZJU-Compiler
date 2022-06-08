@@ -7,7 +7,7 @@ ASTRoot* root_entry = nullptr;
 
 int main()
 {
-    freopen("../../test/function.pas", "r", stdin);
+    freopen("../../test/array.pas", "r", stdin);
     yyparse();
     cout << root_entry->stmt->get_stmt_type() << endl;
     cout << root_entry->stmt->next_stmt->get_stmt_type() << endl;

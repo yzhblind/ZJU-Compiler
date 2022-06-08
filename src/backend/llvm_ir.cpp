@@ -22,6 +22,8 @@ void IR_builder::CodeGen(ASTRoot* root) {
     BasicBlock* MainB = BasicBlock::Create(Context, "Entry", Main);
     IRBuilder<> builder(MainB);
 
+    function<Value* (ASTExpr*)> get_exp_value;
+
     auto Cprint = [&](vector<Value*>args, bool new_line) {
         static Function* llvm_printf = nullptr;
         if (llvm_printf == nullptr) {
@@ -58,18 +60,47 @@ void IR_builder::CodeGen(ASTRoot* root) {
     };
 
     map<string, Value*> Value_map; //Global map
+    map<string, int64_t> Const_map; //only for int
+    /*
+        这里const没有考虑局部还是全局
+    */
     map<string, Function*> Func_map;
 
     map<string, Value*>* local = &Value_map;
 
     Value* con_0 = builder.getInt64(0);
 
-    function<Value* (ASTConstValue*)> build_constant_value = [&](ASTConstValue* val) {
+    function<int(ASTConstValue*)> get_const = [&](ASTConstValue* val) {
+        auto type = val->value_type;
+        using T = ASTConstValue::ConstType;
+        if (type == T::INT) {
+            return (int)(val->int_value);
+        }
+        else if (type == T::REAL) {
+            
+        }
+        else if (type == T::STRING) {
+            
+        }
+        else if (type == T::ID) {
+            //???? 这里有BUG：没有区分local还是global
+            cout << "ID! " << val->str << endl;
+            return (int)Const_map[val->str];
+        }
+        else {
+            //????
+            assert(type == T::NIL);
+        }
+        return 0;
+    };
+
+    function<Value* (ASTConstValue*, string)> build_constant_value = [&](ASTConstValue* val, string name) {
         auto type = val->value_type;
         using T = ASTConstValue::ConstType;
         if (type == T::INT) {
             Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
             builder.CreateStore(builder.getInt64(val->int_value), ret);
+            Const_map[name] = val->int_value;
             return ret;
         }
         else if (type == T::REAL) {
@@ -125,7 +156,18 @@ void IR_builder::CodeGen(ASTRoot* root) {
             return Value_map.find(idx)->second;
         }
         else if (type == T::INDEX) {
+            auto ret = dynamic_cast<ASTVarAccessIndex*>(var);
+            auto tmp = ret->idx;
+            Value* idx = get_exp_value(tmp[0]);
 
+            string name = dynamic_cast<ASTVarAccessId*>(ret->arr)->id;
+            Value* arr;
+            auto it = local->find(name);
+            if (it != local->end()) {
+                arr = it->second;
+            }
+            arr = Value_map.find(name)->second;
+            return builder.CreateGEP(arr, {con_0, idx});
         }
         else if (type == T::FIELD) {
 
@@ -156,10 +198,22 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 //TODO store一个0
                 return ret;
             }*/
-        } //...
+        }
+        else if (type == T::ARRAY) {
+            auto ret = dynamic_cast<ASTTypeArray*>(val);
+            assert(ret->element_type->get_type() == ASTType::TypeKind::ID);
+            assert(to_low(dynamic_cast<ASTTypeId*>(ret->element_type)->id) == "integer");
+            vector<ASTTypeSubrange*> tmp = ret->index;
+            ASTTypeSubrange* O = tmp[0];
+            int le = get_const(O->left);
+            int ri = get_const(O->right);
+            
+            Value* vet = builder.CreateAlloca(ArrayType::get(Type::getInt64Ty(Context), ri - le + 1));
+            return vet;
+        }
     };
 
-    function<Value* (ASTExpr*)> get_exp_value = [&](ASTExpr* expr) {
+    get_exp_value = [&](ASTExpr* expr) {
 
         function<Value* (ASTSimpleExpr*)> get_simple = [&](ASTSimpleExpr* expr) {
 
@@ -371,7 +425,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
     
     function<void(map<string, Value*>&, ASTConstDef*)> build_const = [&](map<string, Value*>& Value_map, ASTConstDef* const_def) {
         while (const_def) {
-            Value_map[const_def->id] = build_constant_value(const_def->value);
+            Value_map[const_def->id] = build_constant_value(const_def->value, const_def->id);
             const_def = const_def->next_const_def;
         }
     };
