@@ -102,9 +102,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
 
     map<string, myValue> Value_map; //Global map
     map<string, int64_t> Const_map; //only for int，或许只需要用在函数定义上
-    /*
-        这里const没有考虑局部还是全局
-    */
+
     map<string, Function*> Func_map;
     map<string, int> Ret_map;
     
@@ -171,15 +169,12 @@ void IR_builder::CodeGen(ASTRoot* root) {
         auto type = val->value_type;
         using T = ASTConstValue::ConstType;
         if (type == T::INT) {
-            cout << "get_constant" << val->int_value << endl;
             Value* ret = builder.getInt32(val->int_value);
             return (myValue){ ret, 0 };
         }
         else if (type == T::REAL) {
             Value* ret = ConstantFP::get(Type::getDoubleTy(Context), val->real_value);
             return (myValue){ ret, 1 };
-            // 好像没找到
-            //return builder.getDouble(val->real_value);
         }
         else if (type == T::STRING) {
             //return builder.getString();
@@ -199,21 +194,17 @@ void IR_builder::CodeGen(ASTRoot* root) {
         using T = ASTVarAccess::TypeKind;
         if (type == T::ID) {
             auto idx = dynamic_cast<ASTVarAccessId*>(var)->id;
-            cout << "ID!" << endl;
             auto it = local->find(idx);
             if (it != local->end()) {
                 if (local == global_pointer) {
-                    cout << "haha! " << idx << endl;
                     global_find = 1;
                 }
                 return (it->second);
             }
-            cout << "wawa!" << endl;
             global_find = 1;
             return (Value_map.find(idx)->second);
         }
         else if (type == T::INDEX) {
-            cout << "INDEX!" << endl;
             auto ret = dynamic_cast<ASTVarAccessIndex*>(var);
             auto tmp = ret->idx;
             auto O = get_exp_value(tmp[0]);
@@ -255,9 +246,15 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 return (myValue) { con_0, 0, gVar };
             }
             else if (to_low(ret->id) == "real") {
-                Value* ret = builder.CreateAlloca(Type::getDoubleTy(Context));
-                builder.CreateStore(fp_0, ret);
-                return (myValue){ ret, 1 }; //real还不是真正的全局
+                if (!flag_global) {  
+                    Value* ret = builder.CreateAlloca(Type::getDoubleTy(Context));
+                    builder.CreateStore(fp_0, ret);
+                    return (myValue){ ret, 1 };
+                }
+                M->getOrInsertGlobal(name, Type::getDoubleTy(Context));
+                GlobalVariable* gVar = M->getNamedGlobal(name);
+                gVar->setInitializer(ConstantFP::get(Type::getDoubleTy(Context), APFloat(0.0)));
+                return (myValue) { con_0, 1, gVar };
             }
         }
         else if (type == T::ARRAY) {
@@ -274,7 +271,8 @@ void IR_builder::CodeGen(ASTRoot* root) {
             }
             M->getOrInsertGlobal(name, ArrayType::get(Type::getInt32Ty(Context), ri - le + 1));
             GlobalVariable* gVar = M->getNamedGlobal(name);
-            gVar->setInitializer(ConstantInt::get(builder.getInt32Ty(), APInt(64, 0)));
+            gVar->setInitializer(ConstantAggregateZero::get(ArrayType::get(Type::getInt32Ty(Context), ri - le + 1)));
+            
             return (myValue) { con_0, 5, gVar };
         }
         return (myValue) {};
@@ -367,7 +365,6 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 }
                 return get_factor(expr->left);
             };
-            cout << "FL!" << expr->neg_flag << endl;
 
             if (expr->right) {
                 auto type = expr->aop;
@@ -483,7 +480,6 @@ void IR_builder::CodeGen(ASTRoot* root) {
                     left = tmp.value;
                 }
             }
-
             builder.CreateStore(right, left);
         }
         else if (type == T::PROCEDURE_CALL) {
@@ -753,9 +749,10 @@ void IR_builder::CodeGen(ASTRoot* root) {
     
     Main_builder();
 
-    outs() << "We just constructed this LLVM module:\n\n" << *M;
+    outs() << *M;
     outs().flush();
-    
+
+    /*
     ExecutionEngine* EE = EngineBuilder(std::move(Owner)).create(); //JIT
 
     std::vector<GenericValue> noargs;
@@ -764,5 +761,5 @@ void IR_builder::CodeGen(ASTRoot* root) {
     // Import result of execution:
     outs() << "Main Return value: " << gv.IntVal << "\n";
     delete EE;
-    llvm_shutdown();
+    llvm_shutdown();*/
 }

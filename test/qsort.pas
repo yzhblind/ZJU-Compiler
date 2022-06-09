@@ -1,9 +1,9 @@
 PROGRAM Sort(input, output);
     CONST
-        MaxElts = 10;
+        MaxElts = 500000;
 
     VAR
-        W, OP, i, j, tmp, size: integer;
+        N, W, OP, i, j, tmp, size: integer;
 
         arr: ARRAY [1..MaxElts] OF Integer;
 
@@ -54,17 +54,18 @@ PROGRAM Sort(input, output);
 
 
     BEGIN
+        read(N);
         i:=1;
-        WHILE i<=10 DO BEGIN
+        WHILE i<=N DO BEGIN
             read(arr[i]); 
             i:=i+1;
         END;
 
         { Sort the contents. }
-        OP := Quicksort(1, 10);
+        OP := Quicksort(1, N);
 
         i:=1;
-        WHILE i<=10 DO BEGIN
+        WHILE i<=N DO BEGIN
             writeln(arr[i]); 
             i:=i+1;
         END;

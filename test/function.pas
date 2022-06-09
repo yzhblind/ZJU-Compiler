@@ -1,4 +1,4 @@
-PROGRAM Add(input, output);
+PROGRAM Func(input, output);
     VAR
         C: integer;
 
@@ -14,18 +14,19 @@ PROGRAM Add(input, output);
             else RESULT := A * Fac(A - 1);
         END;
 
-    Function Pow(B: Integer; A: Integer) : Integer;
+    Function Pow(A: Integer; B: Integer) : Integer;
         VAR
             ANS: integer;
         BEGIN
             ANS := 1;
             REPEAT
-                A := A - 1;
-                ANS := ANS * B;
-            UNTIL A = 0;
+                If (B mod 2 = 1) then ANS := ANS * A;
+                A := A * A;
+                B := B div 2;
+            UNTIL B = 0;
             RESULT := ANS;
         END;
 
     BEGIN
-        write(10, 20);
+        write(Gcd(Pow(2, 10), Fac(5))); {gcd(1024, 120)}
     END.

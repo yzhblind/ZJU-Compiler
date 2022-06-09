@@ -367,7 +367,6 @@ SUBPROGRAM_DECL:
     }
     | FUNCTION_DECL {
         $$ = $1;
-        cout << "FUNCTION_DECL reduced." << endl;
     }
 
     /* 过程声明 */
@@ -825,21 +824,17 @@ COMPOUND_STATEMENT:
 STATEMENT_SEQS:
     STATEMENT {
         $$ = $1;
-        // cout << $$->get_stmt_type() << endl;
     }
     | STATEMENT_SEQS OP_SEMICOLON STATEMENT {
         $$ = $1->append($3);
-        // cout << $1->get_stmt_type() << " "<< $3->get_stmt_type() << endl;
     }
 
 STATEMENT:
     SIMPLE_STATEMENT {
         $$ = $1;
-        cout << "SIMPLE_STATEMENT reduced. The statement type is " << $$->get_stmt_type() << endl;
     }
     | STRUCTURED_STATEMENT {
         $$ = $1;
-        cout << "STRUCTURED_STATEMENT reduced. The statement type is " << $$->get_stmt_type() << endl;
     }
 
 SIMPLE_STATEMENT:
