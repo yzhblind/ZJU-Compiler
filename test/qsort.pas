@@ -1,6 +1,6 @@
 PROGRAM Sort(input, output);
     CONST
-        MaxElts = 5;
+        MaxElts = 10;
 
     VAR
         W, OP, i, j, tmp, size: integer;
@@ -54,19 +54,18 @@ PROGRAM Sort(input, output);
 
 
     BEGIN
-        arr[1] := 5;
-        arr[2] := 4;
-        arr[3] := 6;
-        arr[4] := 9;
-        arr[5] := 3;
+        i:=1;
+        WHILE i<=10 DO BEGIN
+            read(arr[i]); 
+            i:=i+1;
+        END;
 
         { Sort the contents. }
-        OP := Quicksort(1, 5);
+        OP := Quicksort(1, 10);
 
-        { Print. }
-        writeln(arr[1]);
-        writeln(arr[2]);
-        writeln(arr[3]);
-        writeln(arr[4]);
-        writeln(arr[5]);
+        i:=1;
+        WHILE i<=10 DO BEGIN
+            writeln(arr[i]); 
+            i:=i+1;
+        END;
     END.

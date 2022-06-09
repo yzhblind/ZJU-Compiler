@@ -30,7 +30,7 @@ struct myValue {
 };
 
 void IR_builder::CodeGen(ASTRoot* root) {
-    Function* Main = Function::Create(FunctionType::get(Type::getInt64Ty(Context), {}, false), Function::ExternalLinkage, "main", M);
+    Function* Main = Function::Create(FunctionType::get(Type::getInt32Ty(Context), {}, false), Function::ExternalLinkage, "main", M);
     BasicBlock* MainB = BasicBlock::Create(Context, "Entry", Main);
     IRBuilder<> builder(MainB);
 
@@ -70,6 +70,34 @@ void IR_builder::CodeGen(ASTRoot* root) {
         printf_args[0] = builder.CreateGlobalStringPtr(format, "printf_format");
         return builder.CreateCall(llvm_printf, printf_args, "call_printf");
     };
+
+    function<Value*(vector<Value*>, bool)> Cread = [&](vector<Value*>args, bool new_line) {
+        static Function* llvm_scanf = nullptr;
+        if (llvm_scanf == nullptr) {
+            //build printf
+            vector<Type*> arg_types = { Type::getInt8PtrTy(Context) };
+            FunctionType* func_type = FunctionType::get(Type::getInt32Ty(Context), arg_types, true);
+            Function* func = Function::Create(func_type, Function::ExternalLinkage, "scanf", M);
+            func->setCallingConv(CallingConv::C);
+            llvm_scanf = func;
+        }
+        string format;
+        vector<Value*> scanf_args;
+        scanf_args.emplace_back(nullptr);
+        for (auto arg : args) {
+            format += "%d";
+            format.push_back(' ');
+            scanf_args.emplace_back(arg);
+            // TODO string and etc
+        }
+        format.pop_back();
+        if (new_line) {
+            format += "\n";
+        }
+        scanf_args[0] = builder.CreateGlobalStringPtr(format, "scanf_format");
+        return builder.CreateCall(llvm_scanf, scanf_args, "call_scanf");
+    };
+
     int global_find = 0;
 
     map<string, myValue> Value_map; //Global map
@@ -85,7 +113,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
     map<string, myValue>* global_pointer = &Value_map;
     
 
-    Value* con_0 = builder.getInt64(0);
+    Value* con_0 = builder.getInt32(0);
     Value* fp_0 = ConstantFP::get(Type::getDoubleTy(Context), 0);
 
     function<int(ASTConstValue*)> get_const = [&](ASTConstValue* val) {
@@ -110,13 +138,13 @@ void IR_builder::CodeGen(ASTRoot* root) {
         using T = ASTConstValue::ConstType;
         if (type == T::INT) {
             if (!flag_global) {  
-                Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
-                builder.CreateStore(builder.getInt64(val->int_value), ret);
+                Value* ret = builder.CreateAlloca(Type::getInt32Ty(Context));
+                builder.CreateStore(builder.getInt32(val->int_value), ret);
                 return (myValue){ ret, 0 };
             }
-            M->getOrInsertGlobal(name, builder.getInt64Ty());
+            M->getOrInsertGlobal(name, builder.getInt32Ty());
             GlobalVariable* gVar = M->getNamedGlobal(name);
-            gVar->setInitializer(ConstantInt::get(builder.getInt64Ty(), APInt(64, val->int_value)));
+            gVar->setInitializer(ConstantInt::get(builder.getInt32Ty(), APInt(64, val->int_value)));
             Const_map[name] = val->int_value;
             return (myValue){ con_0, 0, gVar };
         }
@@ -143,7 +171,8 @@ void IR_builder::CodeGen(ASTRoot* root) {
         auto type = val->value_type;
         using T = ASTConstValue::ConstType;
         if (type == T::INT) {
-            Value* ret = builder.getInt64(val->int_value);
+            cout << "get_constant" << val->int_value << endl;
+            Value* ret = builder.getInt32(val->int_value);
             return (myValue){ ret, 0 };
         }
         else if (type == T::REAL) {
@@ -170,16 +199,21 @@ void IR_builder::CodeGen(ASTRoot* root) {
         using T = ASTVarAccess::TypeKind;
         if (type == T::ID) {
             auto idx = dynamic_cast<ASTVarAccessId*>(var)->id;
-            
+            cout << "ID!" << endl;
             auto it = local->find(idx);
             if (it != local->end()) {
-                if (local == global_pointer) global_find = 1;
+                if (local == global_pointer) {
+                    cout << "haha! " << idx << endl;
+                    global_find = 1;
+                }
                 return (it->second);
             }
+            cout << "wawa!" << endl;
             global_find = 1;
             return (Value_map.find(idx)->second);
         }
         else if (type == T::INDEX) {
+            cout << "INDEX!" << endl;
             auto ret = dynamic_cast<ASTVarAccessIndex*>(var);
             auto tmp = ret->idx;
             auto O = get_exp_value(tmp[0]);
@@ -211,13 +245,13 @@ void IR_builder::CodeGen(ASTRoot* root) {
             auto ret = dynamic_cast<ASTTypeId*>(val);
             if (to_low(ret->id) == "integer") {
                 if (!flag_global) {  
-                    Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
+                    Value* ret = builder.CreateAlloca(Type::getInt32Ty(Context));
                     builder.CreateStore(con_0, ret);
                     return (myValue){ ret, 0 };
                 }
-                M->getOrInsertGlobal(name, builder.getInt64Ty());
+                M->getOrInsertGlobal(name, builder.getInt32Ty());
                 GlobalVariable* gVar = M->getNamedGlobal(name);
-                gVar->setInitializer(ConstantInt::get(builder.getInt64Ty(), APInt(64, 0)));
+                gVar->setInitializer(ConstantInt::get(builder.getInt32Ty(), APInt(64, 0)));
                 return (myValue) { con_0, 0, gVar };
             }
             else if (to_low(ret->id) == "real") {
@@ -235,12 +269,12 @@ void IR_builder::CodeGen(ASTRoot* root) {
             int le = get_const(O->left);
             int ri = get_const(O->right);
             if (!flag_global) {  
-                Value* vet = builder.CreateAlloca(ArrayType::get(Type::getInt64Ty(Context), ri - le + 1));
+                Value* vet = builder.CreateAlloca(ArrayType::get(Type::getInt32Ty(Context), ri - le + 1));
                 return (myValue){ vet, 5 };
             }
-            M->getOrInsertGlobal(name, ArrayType::get(Type::getInt64Ty(Context), ri - le + 1));
+            M->getOrInsertGlobal(name, ArrayType::get(Type::getInt32Ty(Context), ri - le + 1));
             GlobalVariable* gVar = M->getNamedGlobal(name);
-            gVar->setInitializer(ConstantInt::get(builder.getInt64Ty(), APInt(64, 0)));
+            gVar->setInitializer(ConstantInt::get(builder.getInt32Ty(), APInt(64, 0)));
             return (myValue) { con_0, 5, gVar };
         }
         return (myValue) {};
@@ -261,11 +295,14 @@ void IR_builder::CodeGen(ASTRoot* root) {
                         Value* ret;
                         
                         if (global_find) {
-                            ret = builder.CreateLoad(O.g_value);
+                            if (O.g_value)
+                                ret = builder.CreateLoad(O.g_value);
+                            else 
+                                ret = builder.CreateLoad(O.value);
                         }
                         else {
                             if (O.type == 0)
-                                ret = builder.CreateLoad(Type::getInt64Ty(Context), O.value);
+                                ret = builder.CreateLoad(Type::getInt32Ty(Context), O.value);
                             else if (O.type == 1)
                                 ret = builder.CreateLoad(Type::getDoubleTy(Context), O.value);
                         }
@@ -327,11 +364,10 @@ void IR_builder::CodeGen(ASTRoot* root) {
                             ret = builder.CreateFDiv(L.value, R.value);
                     }
                     return (myValue){ ret, ty };
-
-                    
                 }
                 return get_factor(expr->left);
             };
+            cout << "FL!" << expr->neg_flag << endl;
 
             if (expr->right) {
                 auto type = expr->aop;
@@ -341,7 +377,11 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 auto L = get_term(expr->left), R = get_term(expr->right);
                 int ty = L.type;
 
-                if (ty == 0) {   
+                if (ty == 0) {
+                    if (expr->neg_flag) {
+                        L.value = builder.CreateSub(con_0, L.value);
+                    }
+
                     if (type == T::ADD)
                         ret = builder.CreateAdd(L.value, R.value);
                     else if (type == T::SUB)
@@ -350,6 +390,10 @@ void IR_builder::CodeGen(ASTRoot* root) {
                         ret = builder.CreateOr(L.value, R.value);
                 }
                 else if (ty == 1) {
+                    if (expr->neg_flag) {
+                        L.value = builder.CreateFSub(fp_0, L.value);
+                    }
+                    
                     if (type == T::ADD)
                         ret = builder.CreateFAdd(L.value, R.value);
                     else if (type == T::SUB)
@@ -360,8 +404,19 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 }
                 return (myValue){ ret, ty };
             }
-
-            return get_term(expr->left);
+            auto L = get_term(expr->left);
+            int ty = L.type;
+            if (ty == 0) {
+                if (expr->neg_flag) {
+                    L.value = builder.CreateSub(con_0, L.value);
+                }
+            }
+            else if (ty == 1) {
+                if (expr->neg_flag) {
+                    L.value = builder.CreateFSub(fp_0, L.value);
+                }
+            }
+            return L;
         };
 
         if (expr->right) {
@@ -446,9 +501,28 @@ void IR_builder::CodeGen(ASTRoot* root) {
                     arg.emplace_back(get_exp_value(x->value).value);
                 
                 Cprint(arg, w_stmt->newline);
-            }
-            else {
+            } 
+            else if (type == T::READ) {
+                auto r_stmt = dynamic_cast<ASTReadStmt*>(stmt);
+                auto args = r_stmt->para->read_para;
+                vector<Value*> arg;
+                for (auto x : args) {
+                    global_find = 0;
+                    auto O = var_access(x);
+                    Value* ret;
+                    if (global_find) {
+                        if (O.g_value)
+                            ret = O.g_value;
+                        else
+                            ret = O.value;
+                    }
+                    else {
+                        ret = O.value;
+                    }
+                    arg.emplace_back(ret);
+                }
                 
+                Cread(arg, r_stmt->newline);
             }
         }
         else if (type == T::IF) {
@@ -469,9 +543,6 @@ void IR_builder::CodeGen(ASTRoot* root) {
             builder.CreateBr(Cont_Block);//back
 
             builder.SetInsertPoint(Cont_Block);
-
-
-
         }
         else if (type == T::REPEAT) {
             auto it = dynamic_cast<ASTRepeatStmt*>(stmt);
@@ -520,7 +591,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 assert(var_decl->var_type->get_type() == 0);//is ID
                 auto ty = dynamic_cast<ASTTypeId*>(var_decl->var_type);
                 if (to_low(ty->id) == "integer") {
-                    ret.emplace_back(Type::getInt64Ty(Context));
+                    ret.emplace_back(Type::getInt32Ty(Context));
                 }
                 else if (to_low(ty->id) == "real") {
                     ret.emplace_back(Type::getDoubleTy(Context));
@@ -577,7 +648,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
                 para = para->next_para;
             }
             if ((to_low(func_decl->ret_type_id) == "integer")) {
-                Fun = Function::Create(FunctionType::get(Type::getInt64Ty(Context), func_type, false), Function::ExternalLinkage, decl->id, M);
+                Fun = Function::Create(FunctionType::get(Type::getInt32Ty(Context), func_type, false), Function::ExternalLinkage, decl->id, M);
             }
             else if ((to_low(func_decl->ret_type_id) == "real")) {
                 Fun = Function::Create(FunctionType::get(Type::getDoubleTy(Context), func_type, false), Function::ExternalLinkage, decl->id, M);
@@ -601,8 +672,8 @@ void IR_builder::CodeGen(ASTRoot* root) {
                         for (string str : para->var_decl->id_list) {
                             Value* ret = args_it++;
 
-                            if (func_type[cnt] == Type::getInt64Ty(Context)) {
-                                Value* pointer = builder.CreateAlloca(Type::getInt64Ty(Context));
+                            if (func_type[cnt] == Type::getInt32Ty(Context)) {
+                                Value* pointer = builder.CreateAlloca(Type::getInt32Ty(Context));
                                 builder.CreateStore(ret, pointer);
                                 Value_map_local[str] = { pointer, 0 };
                             }
@@ -630,7 +701,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
             //type_def TODO
             build_map(Value_map_local, root->var_decl);
             
-            Value* ret = builder.CreateAlloca(Type::getInt64Ty(Context));
+            Value* ret = builder.CreateAlloca(Type::getInt32Ty(Context));
             builder.CreateStore(con_0, ret);
             
             if ((to_low(func_decl->ret_type_id) == "integer")) {
@@ -648,7 +719,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
             function<Value* (string)> load_var = [&](string str) {
                 auto it = Value_map_local[str];
                 if (it.type == 0) {  
-                    return builder.CreateLoad(Type::getInt64Ty(Context), Value_map_local[str].value); 
+                    return builder.CreateLoad(Type::getInt32Ty(Context), Value_map_local[str].value); 
                 }
                 else if (it.type == 1)
                     return builder.CreateLoad(Type::getDoubleTy(Context), Value_map_local[str].value); 
@@ -677,14 +748,14 @@ void IR_builder::CodeGen(ASTRoot* root) {
         ASTStmt* stmt = root->stmt;
         if (stmt) Stmt_Gen("main_stmt", stmt, Main);
     
-        builder.CreateRet(builder.getInt64(0));
+        builder.CreateRet(builder.getInt32(0));
     };
     
     Main_builder();
 
     outs() << "We just constructed this LLVM module:\n\n" << *M;
     outs().flush();
-
+    
     ExecutionEngine* EE = EngineBuilder(std::move(Owner)).create(); //JIT
 
     std::vector<GenericValue> noargs;
@@ -695,7 +766,3 @@ void IR_builder::CodeGen(ASTRoot* root) {
     delete EE;
     llvm_shutdown();
 }
-
-/*
-load和store要区分是不是real!!!
-*/

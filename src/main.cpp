@@ -3,11 +3,13 @@
 #include "backend/llvm_ir.hpp"
 #include <iostream>
 
+extern FILE *yyin;
 ASTRoot* root_entry = nullptr;
 
 int main()
 {
-    freopen("../../test/qsort.pas", "r", stdin);
+    yyin = fopen("../../test/qsort.pas", "r");
+    // freopen("../../test/qsort.pas", "r", stdin);
     yyparse();
     cout << root_entry->stmt->get_stmt_type() << endl;
     cout << root_entry->stmt->next_stmt->get_stmt_type() << endl;

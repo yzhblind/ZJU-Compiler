@@ -557,7 +557,7 @@ UNSIGNED_NUMBER:
 
 SIGNED_INTEGER:
     SIGN UNSIGNED_INTEGER{
-        if($1 == OP_SUB)
+        if($1 == 1)
             $$ = -$2;
         else
             $$ = $2;
@@ -568,7 +568,7 @@ SIGNED_INTEGER:
 
 SIGNED_REAL:
     SIGN UNSIGNED_REAL {
-        if($1 == OP_SUB)
+        if($1 == 1)
             $$ = -$2;
         else
             $$ = $2;
@@ -769,8 +769,8 @@ READLN_PARA_LIST:
     }
 
 WRITE_PARA_LIST:
-    WRITE_PARAS {
-        $$ = $1;
+    OP_L_PRTS WRITE_PARAS OP_R_PRTS {
+        $$ = $2;
     } 
 
 WRITE_PARAS:
@@ -786,8 +786,8 @@ WRITELN_PARA_LIST:
     {
         $$ = nullptr;
     }
-    | WRITE_PARAS {
-        $$ = $1;
+    | OP_L_PRTS WRITE_PARAS OP_R_PRTS {
+        $$ = $2;
     }
 
 ACTUAL_PARA:
@@ -1005,13 +1005,13 @@ SIMPLE_EXPRESSION:
         $$ = new ASTSimpleExpr(false, $1);
     }
     | SIGN TERM {
-        $$ = new ASTSimpleExpr($1==OP_SUB, $2);
+        $$ = new ASTSimpleExpr($1, $2);
     }
     | TERM ADDING_OP TERM {
         $$ = new ASTSimpleExpr(false, $1, $2, $3);
     }
     | SIGN TERM ADDING_OP TERM {
-        $$ = new ASTSimpleExpr($1==OP_SUB, $2, $3, $4);
+        $$ = new ASTSimpleExpr($1, $2, $3, $4);
     }
 
 ADDING_OP:
@@ -1027,10 +1027,10 @@ ADDING_OP:
 
 SIGN:
     OP_ADD {
-        $$ = $1;
+        $$ = 0;
     }
     | OP_SUB {
-        $$ = $1;
+        $$ = 1;
     }
 
 VARIABLE_IDENTIFIER:
