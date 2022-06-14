@@ -9,9 +9,9 @@ ASTRoot* root_entry = nullptr;
 int main(int argc,char *argv[]) {
     yyin = fopen(argv[1], "r");
     // freopen("../../test/qsort.pas", "r", stdin);
-
     yyparse();
     
+
     freopen(string("IR.ll").c_str(), "w", stdout);
     IR_builder IR;
     IR.CodeGen(root_entry);

@@ -15,9 +15,10 @@ string to_low(const string& x) {
     string tmp = x;
     transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
     return tmp;
-}
+} //字符串转小写
 
 struct myValue {
+    /*用来区分一个变量的类型和是否为全局变量，方便调用llvm的api*/
     Value* value;
     /*
         0: integer
@@ -101,28 +102,27 @@ void IR_builder::CodeGen(ASTRoot* root) {
     int global_find = 0;
 
     map<string, myValue> Value_map; //Global map
-    map<string, int64_t> Const_map; //only for int，或许只需要用在函数定义上
+    map<string, int64_t> Const_map; //只需要用在数组定义上
 
     map<string, Function*> Func_map;
     map<string, int> Ret_map;
     
 
-    map<string, myValue>* local = &Value_map;
-    map<string, myValue>* global_pointer = &Value_map;
+    map<string, myValue>* local = &Value_map; //目前的代码运行环境，在哪个存放变量的map里查询
+    map<string, myValue>* global_pointer = &Value_map; 
     
 
     Value* con_0 = builder.getInt32(0);
-    Value* fp_0 = ConstantFP::get(Type::getDoubleTy(Context), 0);
+    Value* fp_0 = ConstantFP::get(Type::getDoubleTy(Context), 0); //初始化两种0的常量
 
     function<int(ASTConstValue*)> get_const = [&](ASTConstValue* val) {
-        //only for real
+        //获得ast上一个常量节点的具体值(int)，支持INT和ID两种访问
         auto type = val->value_type;
         using T = ASTConstValue::ConstType;
         if (type == T::INT) {
             return (int)(val->int_value);
         }
         else if (type == T::ID) {
-            //这里有BUG：没有区分local还是global
             return (int)Const_map[val->str];
         }
         else assert(0);
@@ -131,10 +131,13 @@ void IR_builder::CodeGen(ASTRoot* root) {
 
     int flag_global = 0;
 
-    function<myValue (ASTConstValue*, string)> build_constant_value = [&](ASTConstValue* val, string name) {
+    function<myValue(ASTConstValue*, string)> build_constant_value = [&](ASTConstValue* val, string name) {
+        /*
+            构建常量表，通过flag_global控制目前是否在处理全局常量 
+        */
         auto type = val->value_type;
         using T = ASTConstValue::ConstType;
-        if (type == T::INT) {
+        if (type == T::INT) { 
             if (!flag_global) {  
                 Value* ret = builder.CreateAlloca(Type::getInt32Ty(Context));
                 builder.CreateStore(builder.getInt32(val->int_value), ret);
@@ -149,23 +152,23 @@ void IR_builder::CodeGen(ASTRoot* root) {
         else if (type == T::REAL) {
             Value* ret = builder.CreateAlloca(Type::getDoubleTy(Context));
             builder.CreateStore(ConstantFP::get(Type::getDoubleTy(Context), val->real_value), ret);
-            return (myValue){ ret, 1 }; //REAL还不是真正的全局变量
+            return (myValue){ ret, 1 };
         }
         else if (type == T::STRING) {
-            //return builder.getString();
-            //还没找到
+            //未完成
         }
         else if (type == T::ID) {
-            //????
+            //未完成
         }
         else {
-            //????
+            //未完成
             assert(type == T::NIL);
         }
         return (myValue){};
     };
 
     function<myValue(ASTConstValue*)> get_constant_value = [&](ASTConstValue* val) {
+        //
         auto type = val->value_type;
         using T = ASTConstValue::ConstType;
         if (type == T::INT) {
@@ -177,15 +180,13 @@ void IR_builder::CodeGen(ASTRoot* root) {
             return (myValue){ ret, 1 };
         }
         else if (type == T::STRING) {
-            //return builder.getString();
-            //还没找到
+            //未完成
         }
         else if (type == T::ID) {
-            //????
+            //未完成
         }
         else {
-            //????
-            assert(type == T::NIL);
+            //未完成
         }
     };
 
@@ -320,7 +321,6 @@ void IR_builder::CodeGen(ASTRoot* root) {
                             args.emplace_back(get_exp_value(it->expr).value);
                             it = it->next_actual_para;
                         }
-                        //TODO 假设参数全是表达式了
                         Value* tmp = builder.CreateCall(Func_map[ret->id], args);
                         return (myValue){ tmp, Ret_map[ret->id] };
                     }
@@ -727,6 +727,7 @@ void IR_builder::CodeGen(ASTRoot* root) {
     
     function<void()> Main_builder = [&]() {
         flag_global = 1;
+        
         build_const(Value_map, root->const_def);
         //type_def TODO
         build_map(Value_map, root->var_decl);
